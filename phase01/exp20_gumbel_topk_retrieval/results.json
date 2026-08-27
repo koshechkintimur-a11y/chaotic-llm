@@ -1,0 +1,32 @@
+{
+  "N": 16,
+  "K_keys": 8,
+  "V_val": 16,
+  "D": 64,
+  "blocks": 6,
+  "steps": 3000,
+  "batch": 128,
+  "k_sel": 2,
+  "tau": [
+    2.0,
+    0.2
+  ],
+  "FullAttn": {
+    "acc": 1.0,
+    "params": 15120
+  },
+  "ChaoticAttnReadout": {
+    "acc": 1.0,
+    "params": 23382
+  },
+  "ChaoticLocal": {
+    "acc": 0.4290625,
+    "params": 10902
+  },
+  "ChaoticTopK": {
+    "acc": 0.49078125,
+    "acc_hard_topk": 0.2803125,
+    "recall@K": 0.2546875,
+    "params": 23446
+  }
+}
