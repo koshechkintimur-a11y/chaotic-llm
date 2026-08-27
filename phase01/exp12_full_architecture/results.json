@@ -1,0 +1,26 @@
+{
+  "V": 512,
+  "W": 256,
+  "W_local": 64,
+  "d": 64,
+  "order": 2,
+  "beta": 0.3,
+  "train_tokens": 990811,
+  "test_tokens": 1169238,
+  "hierarchical": {
+    "n": 5000,
+    "ppl_model": 26.497809771049553,
+    "ppl_prior": 13.49105089798265,
+    "ppl_gain": 1.9641027204939117,
+    "acc_model": 0.2966,
+    "acc_prior": 0.4142
+  },
+  "attention": {
+    "n": 20000,
+    "ppl_model": 22.43848634313724,
+    "ppl_prior": 11.86730107002068,
+    "ppl_gain": 1.8907825975546888,
+    "acc_model": 0.29425,
+    "acc_prior": 0.42445
+  }
+}

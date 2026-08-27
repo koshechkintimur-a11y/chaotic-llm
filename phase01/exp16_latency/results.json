@@ -1,0 +1,39 @@
+{
+  "device": "cuda",
+  "gpu": "NVIDIA GeForce RTX 3060",
+  "d": 64,
+  "w_local": 64,
+  "W512": {
+    "flops_chaotic": 864256,
+    "flops_attn": 54525952,
+    "ratio": 63.09004739336493,
+    "chaotic_ms_b1": 58.07950799993705,
+    "attn_ms_b1": 0.7573159999446943,
+    "attn_over_chaotic_b1": 0.013039297783746982,
+    "chaotic_ms_b8": 48.14804000008735,
+    "attn_ms_b8": 0.8483300000079907,
+    "attn_over_chaotic_b8": 0.017619201114031886
+  },
+  "W1024": {
+    "flops_chaotic": 1716224,
+    "flops_attn": 209715200,
+    "ratio": 122.19570405727923,
+    "chaotic_ms_b1": 90.1043340000615,
+    "attn_ms_b1": 0.7272919999377336,
+    "attn_over_chaotic_b1": 0.008071665009335037,
+    "chaotic_ms_b8": 85.72960599994985,
+    "attn_ms_b8": 1.7442240001400933,
+    "attn_over_chaotic_b8": 0.020345643489147885
+  },
+  "W2048": {
+    "flops_chaotic": 3435520,
+    "flops_attn": 822083584,
+    "ratio": 239.28941877794338,
+    "chaotic_ms_b1": 178.0026399999042,
+    "attn_ms_b1": 0.7901660000788979,
+    "attn_over_chaotic_b1": 0.004439068994029095,
+    "chaotic_ms_b8": 155.12421200008248,
+    "attn_ms_b8": 5.939686000056099,
+    "attn_over_chaotic_b8": 0.038289870571932
+  }
+}

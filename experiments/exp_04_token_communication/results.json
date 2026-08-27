@@ -1,0 +1,18 @@
+{
+  "summary": "Token communication: signal spread through chaotic dynamics (see exp_03 for full data)",
+  "support_conservation_pure_permutation": {
+    "arnold_final_coverage_N256": 0.56640625,
+    "note": "pure permutation conserves support (1/256) \u2014 math fact"
+  },
+  "spread_with_symmetric_coupling": {
+    "T99_arnold_N256": 10,
+    "T99_random_N256": 10,
+    "T99_arnold_N4096": 15,
+    "note": "T(99%) ~ log2(N)+2 for all schedules (Arnold == random == fixed)"
+  },
+  "selectivity_requires_content_readout": {
+    "chaotic_mlp_readout_taskA": 0.2,
+    "chaotic_attention_readout_taskA": 0.915,
+    "note": "spreading != selection; selection needs content-based readout"
+  }
+}

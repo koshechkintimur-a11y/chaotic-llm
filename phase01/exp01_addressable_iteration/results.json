@@ -1,0 +1,152 @@
+{
+  "N_grid": 1000,
+  "closed_form": "A^t = [[F_{2t-1},F_{2t}],[F_{2t},F_{2t+1}]]",
+  "correctness": {
+    "1": {
+      "closed_vs_fast": true,
+      "closed_vs_seq": true,
+      "state": [
+        579,
+        35
+      ]
+    },
+    "2": {
+      "closed_vs_fast": true,
+      "closed_vs_seq": true,
+      "state": [
+        614,
+        649
+      ]
+    },
+    "3": {
+      "closed_vs_fast": true,
+      "closed_vs_seq": true,
+      "state": [
+        263,
+        912
+      ]
+    },
+    "7": {
+      "closed_vs_fast": true,
+      "closed_vs_seq": true,
+      "state": [
+        571,
+        531
+      ]
+    },
+    "10": {
+      "closed_vs_fast": true,
+      "closed_vs_seq": true,
+      "state": [
+        103,
+        471
+      ]
+    },
+    "100": {
+      "closed_vs_fast": true,
+      "closed_vs_seq": true,
+      "state": [
+        423,
+        231
+      ]
+    },
+    "1000": {
+      "closed_vs_fast": true,
+      "closed_vs_seq": true,
+      "state": [
+        623,
+        831
+      ]
+    }
+  },
+  "correctness_all_ok": true,
+  "timing": {
+    "10": {
+      "t_closed_s": 1.809999957913533e-05,
+      "t_fastpow_s": 3.3399999665562063e-05,
+      "t_sequential_s": 2.8399999791872688e-05,
+      "sequential_agree": true,
+      "speedup_vs_sequential": 1.569060798466019,
+      "log2_t": 3.321928094887362
+    },
+    "100": {
+      "t_closed_s": 2.2199999875738285e-05,
+      "t_fastpow_s": 4.350000017439015e-05,
+      "t_sequential_s": 0.00024790000134089496,
+      "sequential_agree": true,
+      "speedup_vs_sequential": 11.166666789571357,
+      "log2_t": 6.643856189774724
+    },
+    "1000": {
+      "t_closed_s": 2.1300000298651867e-05,
+      "t_fastpow_s": 5.399999827204738e-05,
+      "t_sequential_s": 0.0024355999994440936,
+      "sequential_agree": true,
+      "speedup_vs_sequential": 114.34741621098705,
+      "log2_t": 9.965784284662087
+    },
+    "10000": {
+      "t_closed_s": 2.3599999622092582e-05,
+      "t_fastpow_s": 5.779999992228113e-05,
+      "t_sequential_s": 0.034236999999848194,
+      "sequential_agree": "extrapolated",
+      "speedup_vs_sequential": 1450.7203622070415,
+      "log2_t": 13.287712379549449
+    },
+    "1000000": {
+      "t_closed_s": 3.199999991920777e-05,
+      "t_fastpow_s": 8.35999999253545e-05,
+      "t_sequential_s": 3.3905999989656266,
+      "sequential_agree": "extrapolated",
+      "speedup_vs_sequential": 105956.25023518964,
+      "log2_t": 19.931568569324174
+    },
+    "1000000000": {
+      "t_closed_s": 4.179999996267725e-05,
+      "t_fastpow_s": 0.00012269999933778308,
+      "t_sequential_s": 3227.100000003702,
+      "sequential_agree": "extrapolated",
+      "speedup_vs_sequential": 77203349.35131922,
+      "log2_t": 29.897352853986263
+    },
+    "1000000000000": {
+      "t_closed_s": 5.0799999371520244e-05,
+      "t_fastpow_s": 0.00016039999900385737,
+      "t_sequential_s": 3390200.0013767974,
+      "sequential_agree": "extrapolated",
+      "speedup_vs_sequential": 66736221325.18034,
+      "log2_t": 39.86313713864835
+    },
+    "1000000000000000000": {
+      "t_closed_s": 7.00999989931006e-05,
+      "t_fastpow_s": 0.00025880000066536013,
+      "t_sequential_s": 3363899999385.467,
+      "sequential_agree": "extrapolated",
+      "speedup_vs_sequential": 4.798716187879759e+16,
+      "log2_t": 59.794705707972525
+    }
+  },
+  "honest_baseline_note": "For an autonomous LINEAR map the honest baseline for x_t is the matrix power O(log t), NOT sequential iteration O(t).  The chaotic closed form matches the honest baseline; the O(t) comparison is a strawman.",
+  "linear_computation_limits": {
+    "1": {
+      "xor": true,
+      "and": false
+    },
+    "2": {
+      "xor": true,
+      "and": false
+    },
+    "3": {
+      "xor": true,
+      "and": false
+    },
+    "5": {
+      "xor": true,
+      "and": false
+    },
+    "10": {
+      "xor": true,
+      "and": false
+    }
+  }
+}

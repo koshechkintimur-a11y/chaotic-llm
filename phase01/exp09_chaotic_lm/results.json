@@ -1,0 +1,34 @@
+{
+  "window": 64,
+  "blocks": 8,
+  "d": 64,
+  "order": 3,
+  "beta": 0.3,
+  "vocab": 160,
+  "corpus_train_chars": 4000000,
+  "corpus_test_chars": 2339150,
+  "models": {
+    "ChaoticLM": {
+      "n": 36549,
+      "ppl_model": 7.811284472285651,
+      "ppl_mix": 4.936216669675596,
+      "ppl_ratio": 1.5824435990162893,
+      "acc_model": 0.4800404935839558,
+      "acc_mix": 0.6028619114066048
+    },
+    "AttnLM": {
+      "n": 36549,
+      "ppl_model": 5.637907948319682,
+      "ppl_mix": 4.124516918562065,
+      "ppl_ratio": 1.3669256447819909,
+      "acc_model": 0.5573066294563462,
+      "acc_mix": 0.6257353142356836
+    },
+    "ngram_prior": {
+      "n": 36201,
+      "ppl_prior": Infinity,
+      "acc_prior": 0.6482970083699345,
+      "coverage": 0.9904514363885089
+    }
+  }
+}

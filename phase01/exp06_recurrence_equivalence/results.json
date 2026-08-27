@@ -1,0 +1,59 @@
+{
+  "expressivity_one_map": {
+    "64": {
+      "T(N)": 48,
+      "distinct_orbits_sampled": 123,
+      "fraction_of_space_per_orbit": 0.01171875,
+      "min_distinct_orbits_lower_bound": 85
+    },
+    "128": {
+      "T(N)": 96,
+      "distinct_orbits_sampled": 245,
+      "fraction_of_space_per_orbit": 0.005859375,
+      "min_distinct_orbits_lower_bound": 170
+    },
+    "256": {
+      "T(N)": 192,
+      "distinct_orbits_sampled": 487,
+      "fraction_of_space_per_orbit": 0.0029296875,
+      "min_distinct_orbits_lower_bound": 341
+    }
+  },
+  "expressivity_note": "One cat map expresses at least N^2/T(N) ~ O(N) distinct orbits (sampled: 123/245/487 for N=64/128/256), and every orbit is a LINEAR periodic function (A^t x_0).  N independent blocks express N UNCONSTRAINED functions.  The parameter saving of one map (4 params vs N blocks) is exactly RNN weight-sharing \u2014 standard, not chaotic \u2014 and it buys only linear periodic routes, far below what N blocks can express.",
+  "routing_cost_table": {
+    "chaotic_router": {
+      "construction": "encoder training (same as any learned router)",
+      "index": "orbit tables: O(N^2/T * T) = O(N^2) cells (~170 orbits x ~96 cells)",
+      "inference": "orbit scan: O(orbit_len) ~ 82.1 steps; expected with reachability p=0.77: ~107 steps (retries)",
+      "correction": "0 (deterministic) or O(T) if controlled",
+      "reachability_limit": "single-cell target reachable only 0.0045 of the time"
+    },
+    "hash_table": {
+      "construction": "O(K) entries",
+      "index": "O(K) memory",
+      "inference": "O(1)",
+      "correction": "n/a",
+      "note": "context->expert is exactly what the chaotic encoder must learn ANYWAY; the hash does it directly without the orbit scan."
+    },
+    "trie": {
+      "construction": "O(total_key_len)",
+      "index": "O(total_key_len) memory",
+      "inference": "O(key_len)",
+      "correction": "n/a"
+    },
+    "moe_router": {
+      "construction": "classifier training",
+      "index": "O(K) params",
+      "inference": "O(K) softmax (or O(log K) with tree)",
+      "correction": "n/a",
+      "note": "same training cost as the chaotic encoder, no scan, no reachability limit."
+    }
+  },
+  "C_total": {
+    "chaotic": "C_train(encoder) + C_index(O(N^2)) + C_infer(O(orbit)) + C_corr(0) = WORSE than hash on index AND inference, equal on training",
+    "hash": "C_index(O(K)) + C_infer(O(1))",
+    "moe": "C_train + C_infer(O(K))",
+    "verdict": "The chaotic router must train the same encoder as any router, then ADDS an O(N^2) index and an O(orbit) scan, and is limited by reachability.  It is a strictly more expensive hash. (TZ 18.1, 18.2: any win vanishes after preprocessing; chaotic routing == lookup with extra cost.)"
+  },
+  "hidden_transfer_note": "The only 'cheap' part of chaos \u2014 the closed form A^t (exp01) \u2014 has zero construction cost, but it matches (not beats) the honest baseline (matrix power O(log t)).  The O(t) comparison is a strawman.  Everything else (routing) shifts cost INTO index/training, exactly the hidden transfer the TZ warns about."
+}

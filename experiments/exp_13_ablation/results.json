@@ -1,0 +1,26 @@
+{
+  "full_gsf": {
+    "acc": 0.189,
+    "params": 5079
+  },
+  "no_gsf": {
+    "acc": 0.19,
+    "params": 2902
+  },
+  "shallow_3": {
+    "acc": 0.173,
+    "params": 2899
+  },
+  "deep_10": {
+    "acc": 0.184,
+    "params": 2906
+  },
+  "perm_only": {
+    "acc": 0.068,
+    "params": 2902
+  },
+  "no_perm": {
+    "acc": 0.18,
+    "params": 2902
+  }
+}

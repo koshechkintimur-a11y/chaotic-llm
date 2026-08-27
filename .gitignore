@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Model checkpoints (regenerable artifacts)
+*.pt
+
+# Corpus files — BUILT FROM THE USER'S PRIVATE PROJECTS (Desktop/03_Проекты).
+# Do NOT commit: would leak private source code. Rebuild with build_corpus.py.
+phase01/corpus_train.txt
+phase01/corpus_test.txt
+
+# Logs / scratch
+*.log
+test_save.pt
+
+# OS
+.DS_Store
+Thumbs.db

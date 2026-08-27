@@ -1,0 +1,25 @@
+{
+  "V": 512,
+  "W": 256,
+  "train_steps": 12000,
+  "order": 2,
+  "global_beta": {
+    "n": 20000,
+    "ppl": 11.235028266906738,
+    "acc": 0.42965,
+    "beta": 0.9719984531402588
+  },
+  "context_beta": {
+    "n": 20000,
+    "ppl": NaN,
+    "acc": 0.00115,
+    "beta_mean": NaN,
+    "beta_std": NaN
+  },
+  "fixed_beta": {
+    "n": 20000,
+    "ppl": 13.739290247390826,
+    "acc": 0.4056,
+    "beta": 0.3
+  }
+}

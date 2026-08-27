@@ -1,0 +1,35 @@
+{
+  "V": 512,
+  "W": 256,
+  "W_local": 64,
+  "d": 64,
+  "order": 2,
+  "beta": 0.3,
+  "train_tokens": 990811,
+  "test_tokens": 1169238,
+  "train_steps": 12000,
+  "hier_plain": {
+    "n": 20000,
+    "ppl_model": 24.906824927986264,
+    "ppl_prior": 12.49946220756607,
+    "ppl_gain": 1.992631724020084,
+    "acc_model": 0.2855,
+    "acc_prior": 0.4088
+  },
+  "hier_attn_readout": {
+    "n": 20000,
+    "ppl_model": 23.717169208013612,
+    "ppl_prior": 12.184827237128601,
+    "ppl_gain": 1.9464510038964367,
+    "acc_model": 0.29325,
+    "acc_prior": 0.41395
+  },
+  "attn_plain": {
+    "n": 20000,
+    "ppl_model": 25.701928556137954,
+    "ppl_prior": 12.636112406913806,
+    "ppl_gain": 2.0340060082146176,
+    "acc_model": 0.2628,
+    "acc_prior": 0.4103
+  }
+}

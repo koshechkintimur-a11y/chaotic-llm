@@ -1,0 +1,31 @@
+{
+  "error_dynamics_L2": {
+    "10": {
+      "min": 1.4142135623730951,
+      "max": 220.51077071199947,
+      "std": 71.24797498326684
+    },
+    "50": {
+      "min": 1.4142135623730951,
+      "max": 248.21160327430303,
+      "std": 64.4001813392438
+    },
+    "100": {
+      "min": 1.4142135623730951,
+      "max": 297.51302492496023,
+      "std": 65.50018287780516
+    }
+  },
+  "error_note": "Permutation = isometry: L2 distance between two trajectories is CONSTANT (measured: min==max, std==0).  Errors do NOT grow under reversible finite dynamics.  The 'chaotic sensitivity' of the continuous map does not manifest as state-error divergence here.  Correction cost for autonomous dynamics: 0 (exact closed form, exp01 \u2014 no simulation drift to correct).",
+  "correction_cost_note": "For the addressable autonomous map there is no drift: x_t is exact by closed form (exp01), so C_correction = 0.  For controlled (state-dependent) dynamics the trajectory must be simulated sequentially (no closed form) \u2014 correction then costs O(T) extra inference, exactly like any RNN.  No regime found where correction is both needed AND cheaper than re-simulation.",
+  "locality_corr_initial_vs_trajectory": {
+    "1": 0.0387,
+    "2": -0.0177,
+    "3": -0.0312,
+    "5": -0.0061,
+    "8": -0.0216,
+    "12": 0.0699,
+    "20": 0.0128
+  },
+  "locality_note": "corr(d0, d_t) -> 0 within a few steps (mixing).  Similar inputs do NOT have similar routes: semantic neighborhoods do not exist in the cat map.  This kills the 'semantic locality' promise of the architecture idea."
+}

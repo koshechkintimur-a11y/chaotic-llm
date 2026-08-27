@@ -1,0 +1,39 @@
+{
+  "16": {
+    "T(N)": 12,
+    "first_exact_return_t": 12,
+    "reassembly_exact_at_T": true,
+    "distinct_scramblings_before_return": 12,
+    "orbit_fraction_of_space": 0.046875
+  },
+  "32": {
+    "T(N)": 24,
+    "first_exact_return_t": 24,
+    "reassembly_exact_at_T": true,
+    "distinct_scramblings_before_return": 24,
+    "orbit_fraction_of_space": 0.0234375
+  },
+  "64": {
+    "T(N)": 48,
+    "first_exact_return_t": 48,
+    "reassembly_exact_at_T": true,
+    "distinct_scramblings_before_return": 48,
+    "orbit_fraction_of_space": 0.01171875
+  },
+  "period_control_reachable": {
+    "N": 64,
+    "states_reachable_by_controlling_t": 48,
+    "total_states": 4096,
+    "fraction": 0.01171875
+  },
+  "reassembly_note": "Reassembly after T(N) steps is exact (Poincare recurrence).  But 'unscrambling' the state at step t is simply applying the inverse LINEAR map A^{T-t} \u2014 addressable in O(log t) (exp01), and it performs NO computation: it is linear algebra.  Controlling t selects among the T(N) orbit states \u2014 a piecewise-linear function with <= T(N) pieces.  Expressivity is bounded by linearity (exp01: no AND).  And information never leaves the orbit (exp02: 0.75/N of the space).",
+  "pixel_orbit": {
+    "pixel": [
+      5,
+      7
+    ],
+    "orbit_size": 48,
+    "space_size": 4096,
+    "fraction": 0.01171875
+  }
+}

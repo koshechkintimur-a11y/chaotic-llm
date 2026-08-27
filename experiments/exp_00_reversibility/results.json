@@ -1,0 +1,205 @@
+{
+  "Ns": [
+    8,
+    16,
+    32,
+    64,
+    128,
+    256,
+    512,
+    1024
+  ],
+  "iters": [
+    1,
+    2,
+    3,
+    7,
+    11
+  ],
+  "runs": {
+    "8": {
+      "inv_t1_maxerr": 0,
+      "inv_t1_exact_frac": 1.0,
+      "inv_t2_maxerr": 0,
+      "inv_t2_exact_frac": 1.0,
+      "inv_t3_maxerr": 0,
+      "inv_t3_exact_frac": 1.0,
+      "inv_t7_maxerr": 0,
+      "inv_t7_exact_frac": 1.0,
+      "inv_t11_maxerr": 0,
+      "inv_t11_exact_frac": 1.0,
+      "state_orbit_periods_sample": [
+        1,
+        3,
+        6
+      ],
+      "state_orbit_max": 6,
+      "map_period_T(N)": 6,
+      "worst_inv_error": 0
+    },
+    "16": {
+      "inv_t1_maxerr": 0,
+      "inv_t1_exact_frac": 1.0,
+      "inv_t2_maxerr": 0,
+      "inv_t2_exact_frac": 1.0,
+      "inv_t3_maxerr": 0,
+      "inv_t3_exact_frac": 1.0,
+      "inv_t7_maxerr": 0,
+      "inv_t7_exact_frac": 1.0,
+      "inv_t11_maxerr": 0,
+      "inv_t11_exact_frac": 1.0,
+      "state_orbit_periods_sample": [
+        3,
+        6,
+        12
+      ],
+      "state_orbit_max": 12,
+      "map_period_T(N)": 12,
+      "worst_inv_error": 0
+    },
+    "32": {
+      "inv_t1_maxerr": 0,
+      "inv_t1_exact_frac": 1.0,
+      "inv_t2_maxerr": 0,
+      "inv_t2_exact_frac": 1.0,
+      "inv_t3_maxerr": 0,
+      "inv_t3_exact_frac": 1.0,
+      "inv_t7_maxerr": 0,
+      "inv_t7_exact_frac": 1.0,
+      "inv_t11_maxerr": 0,
+      "inv_t11_exact_frac": 1.0,
+      "state_orbit_periods_sample": [
+        3,
+        6,
+        12,
+        24
+      ],
+      "state_orbit_max": 24,
+      "map_period_T(N)": 24,
+      "worst_inv_error": 0
+    },
+    "64": {
+      "inv_t1_maxerr": 0,
+      "inv_t1_exact_frac": 1.0,
+      "inv_t2_maxerr": 0,
+      "inv_t2_exact_frac": 1.0,
+      "inv_t3_maxerr": 0,
+      "inv_t3_exact_frac": 1.0,
+      "inv_t7_maxerr": 0,
+      "inv_t7_exact_frac": 1.0,
+      "inv_t11_maxerr": 0,
+      "inv_t11_exact_frac": 1.0,
+      "state_orbit_periods_sample": [
+        3,
+        12,
+        24,
+        48
+      ],
+      "state_orbit_max": 48,
+      "map_period_T(N)": 48,
+      "worst_inv_error": 0
+    },
+    "128": {
+      "inv_t1_maxerr": 0,
+      "inv_t1_exact_frac": 1.0,
+      "inv_t2_maxerr": 0,
+      "inv_t2_exact_frac": 1.0,
+      "inv_t3_maxerr": 0,
+      "inv_t3_exact_frac": 1.0,
+      "inv_t7_maxerr": 0,
+      "inv_t7_exact_frac": 1.0,
+      "inv_t11_maxerr": 0,
+      "inv_t11_exact_frac": 1.0,
+      "state_orbit_periods_sample": [
+        3,
+        6,
+        12,
+        24,
+        48,
+        96
+      ],
+      "state_orbit_max": 96,
+      "map_period_T(N)": 96,
+      "worst_inv_error": 0
+    },
+    "256": {
+      "inv_t1_maxerr": 0,
+      "inv_t1_exact_frac": 1.0,
+      "inv_t2_maxerr": 0,
+      "inv_t2_exact_frac": 1.0,
+      "inv_t3_maxerr": 0,
+      "inv_t3_exact_frac": 1.0,
+      "inv_t7_maxerr": 0,
+      "inv_t7_exact_frac": 1.0,
+      "inv_t11_maxerr": 0,
+      "inv_t11_exact_frac": 1.0,
+      "state_orbit_periods_sample": [
+        24,
+        48,
+        96,
+        192
+      ],
+      "state_orbit_max": 192,
+      "map_period_T(N)": 192,
+      "worst_inv_error": 0
+    },
+    "512": {
+      "inv_t1_maxerr": 0,
+      "inv_t1_exact_frac": 1.0,
+      "inv_t2_maxerr": 0,
+      "inv_t2_exact_frac": 1.0,
+      "inv_t3_maxerr": 0,
+      "inv_t3_exact_frac": 1.0,
+      "inv_t7_maxerr": 0,
+      "inv_t7_exact_frac": 1.0,
+      "inv_t11_maxerr": 0,
+      "inv_t11_exact_frac": 1.0,
+      "state_orbit_periods_sample": [
+        96,
+        192,
+        384
+      ],
+      "state_orbit_max": 384,
+      "map_period_T(N)": 384,
+      "worst_inv_error": 0
+    },
+    "1024": {
+      "inv_t1_maxerr": 0,
+      "inv_t1_exact_frac": 1.0,
+      "inv_t2_maxerr": 0,
+      "inv_t2_exact_frac": 1.0,
+      "inv_t3_maxerr": 0,
+      "inv_t3_exact_frac": 1.0,
+      "inv_t7_maxerr": 0,
+      "inv_t7_exact_frac": 1.0,
+      "inv_t11_maxerr": 0,
+      "inv_t11_exact_frac": 1.0,
+      "state_orbit_periods_sample": [
+        96,
+        192,
+        384,
+        768
+      ],
+      "state_orbit_max": 768,
+      "map_period_T(N)": 768,
+      "worst_inv_error": 0
+    }
+  },
+  "token_sequence_reversibility": {
+    "tok16_t1": true,
+    "tok16_t2": true,
+    "tok16_t5": true,
+    "tok16_t9": true,
+    "tok16_compose_1_2_5": true,
+    "tok64_t1": true,
+    "tok64_t2": true,
+    "tok64_t5": true,
+    "tok64_t9": true,
+    "tok64_compose_1_2_5": true,
+    "tok256_t1": true,
+    "tok256_t2": true,
+    "tok256_t5": true,
+    "tok256_t9": true,
+    "tok256_compose_1_2_5": true
+  }
+}

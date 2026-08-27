@@ -1,0 +1,17 @@
+{
+  "A_phantom_rate_chaotic_proposer": 0.032,
+  "B_acc_vs_beta_chaos": {
+    "0.0": 0.274,
+    "0.1": 0.489,
+    "0.3": 0.6435,
+    "0.5": 0.7985,
+    "0.7": 1.0,
+    "1.0": 1.0
+  },
+  "C_acc_vs_beta_random_proposer": {
+    "0.0": 0.1175,
+    "0.3": 0.5925,
+    "1.0": 1.0
+  },
+  "note": "The missing parameter is BETA: the mixture weight blending the chaotic proposal with a data-driven transition prior.  beta=0 (pure chaos) is phantom \u2014 accuracy at chance.  beta>0 (prior) carries the real information.  The chaotic proposer and a random proposer give the SAME accuracy with the same prior \u2014 the chaos does not add routing information (consistent with exp02/03)."
+}

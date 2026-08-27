@@ -1,0 +1,90 @@
+{
+  "exp06a": {
+    "grids": {
+      "32": {
+        "random": {
+          "success_rate": 0.04,
+          "mean_steps_if_success": 12.5
+        },
+        "greedy": {
+          "success_rate": 1.0,
+          "mean_steps_if_success": 1.0
+        },
+        "zero": {
+          "success_rate": 0.0,
+          "mean_steps_if_success": null
+        }
+      },
+      "64": {
+        "random": {
+          "success_rate": 0.06,
+          "mean_steps_if_success": 42.0
+        },
+        "greedy": {
+          "success_rate": 1.0,
+          "mean_steps_if_success": 1.0
+        },
+        "zero": {
+          "success_rate": 0.0,
+          "mean_steps_if_success": null
+        }
+      },
+      "128": {
+        "random": {
+          "success_rate": 0.0,
+          "mean_steps_if_success": null
+        },
+        "greedy": {
+          "success_rate": 1.0,
+          "mean_steps_if_success": 1.0
+        },
+        "zero": {
+          "success_rate": 0.0,
+          "mean_steps_if_success": null
+        }
+      },
+      "256": {
+        "random": {
+          "success_rate": 0.0,
+          "mean_steps_if_success": null
+        },
+        "greedy": {
+          "success_rate": 1.0,
+          "mean_steps_if_success": 1.0
+        },
+        "zero": {
+          "success_rate": 0.0,
+          "mean_steps_if_success": null
+        }
+      },
+      "512": {
+        "random": {
+          "success_rate": 0.0,
+          "mean_steps_if_success": null
+        },
+        "greedy": {
+          "success_rate": 1.0,
+          "mean_steps_if_success": 1.0
+        },
+        "zero": {
+          "success_rate": 0.0,
+          "mean_steps_if_success": null
+        }
+      },
+      "1024": {
+        "random": {
+          "success_rate": 0.0,
+          "mean_steps_if_success": null
+        },
+        "greedy": {
+          "success_rate": 1.0,
+          "mean_steps_if_success": 1.0
+        },
+        "zero": {
+          "success_rate": 0.0,
+          "mean_steps_if_success": null
+        }
+      }
+    }
+  }
+}

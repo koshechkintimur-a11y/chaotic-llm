@@ -1,0 +1,123 @@
+{
+  "task": "A-D",
+  "note": "Consolidated from real training runs (300-500 epochs, one-hot, CE). Task A: query at end; Task B: L=16 padded to N=25; Task C: N=16; Task D: N=9.",
+  "models": {
+    "A": {
+      "FullAttn": {
+        "accuracy": 1.0,
+        "flops": 854500.0,
+        "params": 28304
+      },
+      "LocalAttn": {
+        "accuracy": 0.415,
+        "flops": 689400.0,
+        "params": 15600
+      },
+      "Chaotic+GSF": {
+        "accuracy": 0.194,
+        "flops": 32260.0,
+        "params": 5079
+      },
+      "Chaotic": {
+        "accuracy": 0.2,
+        "flops": 3840.0,
+        "params": 2902
+      },
+      "GRU": {
+        "accuracy": 0.163,
+        "flops": 196600.0,
+        "params": 8720
+      },
+      "MLP": {
+        "accuracy": 0.066,
+        "flops": 131100.0,
+        "params": 9680
+      }
+    },
+    "B": {
+      "FullAttn": {
+        "accuracy": 1.0
+      },
+      "LocalAttn": {
+        "accuracy": 1.0
+      },
+      "Chaotic+GSF": {
+        "accuracy": 1.0
+      },
+      "Chaotic": {
+        "accuracy": 1.0
+      },
+      "GRU": {
+        "accuracy": 1.0
+      },
+      "MLP": {
+        "accuracy": 1.0
+      },
+      "note": "trivial version (B=A copy); honest long-range results in exp_05_long_range"
+    },
+    "C": {
+      "FullAttn": {
+        "accuracy": 0.143,
+        "flops": 854500.0,
+        "params": 29184
+      },
+      "LocalAttn": {
+        "accuracy": 0.144,
+        "flops": 689400.0,
+        "params": 16480
+      },
+      "Chaotic+GSF": {
+        "accuracy": 0.233,
+        "flops": 32260.0,
+        "params": 5959
+      },
+      "Chaotic": {
+        "accuracy": 0.101,
+        "flops": 3840.0,
+        "params": 3782
+      },
+      "GRU": {
+        "accuracy": 0.029,
+        "flops": 196600.0,
+        "params": 9600
+      },
+      "MLP": {
+        "accuracy": 0.029,
+        "flops": 131100.0,
+        "params": 10560
+      }
+    },
+    "D": {
+      "FullAttn": {
+        "accuracy": 1.0,
+        "flops": 463900.0,
+        "params": 27952
+      },
+      "LocalAttn": {
+        "accuracy": 1.0,
+        "flops": 379400.0,
+        "params": 15248
+      },
+      "Chaotic+GSF": {
+        "accuracy": 1.0,
+        "flops": 29040.0,
+        "params": 4727
+      },
+      "Chaotic": {
+        "accuracy": 0.139,
+        "flops": 1968.0,
+        "params": 2550
+      },
+      "GRU": {
+        "accuracy": 0.062,
+        "flops": 110600.0,
+        "params": 8592
+      },
+      "MLP": {
+        "accuracy": 0.061,
+        "flops": 73730.0,
+        "params": 9552
+      }
+    }
+  }
+}

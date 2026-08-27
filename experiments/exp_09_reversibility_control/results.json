@@ -1,0 +1,8 @@
+{
+  "exp09": {
+    "no_gsf_decode_max_err": 4.678964614868164e-06,
+    "gsf_decode_err_with_stored_gates": 1.1622905731201172e-06,
+    "gsf_decode_err_recomputed_gates": 0.3638228476047516,
+    "adaptive_depth_note": "adaptive depth requires storing the exit depth T; decode is defined only for the exact T used in encode"
+  }
+}

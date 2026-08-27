@@ -1,0 +1,8 @@
+{
+  "exp08": {
+    "acc_fixed_depth8": 0.1934375,
+    "acc_early_exit": 0.1934375,
+    "mean_exit_depth": 8.0,
+    "compute_saved_frac": 0.0
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "xor": {
+    "acc_readout_on_raw": 0.5103333393732706,
+    "acc_readout_on_A^5_x0": 0.5200000206629435,
+    "absorbable_delta": -0.009666681289672852,
+    "n_classes": 2
+  },
+  "and": {
+    "acc_readout_on_raw": 0.7480000257492065,
+    "acc_readout_on_A^5_x0": 0.7480000257492065,
+    "absorbable_delta": 0.0,
+    "n_classes": 2
+  },
+  "parity8": {
+    "acc_readout_on_raw": 0.5566666523615519,
+    "acc_readout_on_A^5_x0": 0.5639999906222025,
+    "absorbable_delta": -0.007333338260650635,
+    "n_classes": 2
+  },
+  "assoc": {
+    "acc_readout_on_raw": 0.8610000014305115,
+    "acc_readout_on_A^5_x0": 0.6153333385785421,
+    "absorbable_delta": 0.24566666285196936,
+    "n_classes": 3
+  },
+  "absorbability_note": "A fixed linear map between learned layers is absorbable: readout(A^T x_0) == (readout \u2218 A^T)(x_0), a readout of the SAME capacity.  The chaotic map adds no computational capability.  Measured delta should be ~0 (same accuracy either way)."
+}
