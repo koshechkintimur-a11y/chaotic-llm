@@ -1,0 +1,29 @@
+{
+  "V": 512,
+  "W": 256,
+  "d": 64,
+  "order": 2,
+  "beta": 0.3,
+  "train_steps": 6000,
+  "anchor_rounds": 2,
+  "train_tokens": 990811,
+  "test_tokens": 1169238,
+  "V1_local": {
+    "n": 20000,
+    "ppl_model": 32.83460061954243,
+    "ppl_prior": 13.792146779067123,
+    "ppl_gain": 2.3806736649131937,
+    "acc_model": 0.23095,
+    "acc_prior": 0.4068,
+    "params": 90828
+  },
+  "V2_anchor": {
+    "n": 20000,
+    "ppl_model": 45.339259230890384,
+    "ppl_prior": 15.269021699706315,
+    "ppl_gain": 2.9693624203679296,
+    "acc_model": 0.1936,
+    "acc_prior": 0.40655,
+    "params": 90828
+  }
+}

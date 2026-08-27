@@ -125,22 +125,27 @@
 2. **Двойной селектор**: β-приор (корпусная статистика) + attention-readout
    (контентная селекция) — ортогональные механизмы выбора на дешёвом пропозере.
 
-## 15. Proposed Architecture v0.2
+## 15. Proposed Architecture v0.2 → v0.3 (attention-free)
 
+**v0.2** (attention-readout):
+```
+Input → Embedding → Hierarchical Chaotic Mixer → Attention Readout → β-mix → Logits
+```
+
+**v0.3** (exp18: attention-readout удалён — локальный readout + β дают ту же точность):
 ```
 Input (BPE-токены)
   → Embedding + Position
-  → Hierarchical Chaotic Mixer (L блоков):
-      локальные окна 64: 8×(permuteₜ + coupling)
-      глобальное реле 4: 4×(permuteₜ + coupling)  [O(W log W)]
-  → Attention Readout (query по всем W состояниям)  [O(W·d)]
-  → β-микстура с корпусным приором  [O(1)]
+  → Hierarchical Chaotic Mixer (локальные окна 64 + глобальное реле)  [O(W log W)]
+  → Local Readout: h_last + gmean → MLP                             [O(d)]
+  → β-микстура с корпусным приором (β=0.3)                          [O(1)]
   → Logits
 ```
 
-Вычислительная сложность одного слоя: O(W log W + W·d) вместо O(W²·d).
-Главный результат: **та же точность в пределах 14% PPL при ~30× дешевле
-перемешивании и сохранении обратимости шагов.**
+**В v0.3 нет ни одного dot-product attention.** Смешивание O(W log W),
+readout O(d), приор O(1). Точность = v0.2 (PPL 32.8 vs 32.5, +β 13.8 vs 13.7
+на 6000 шагов). Якорный запрос (селекция через впрыскивание запроса в
+динамику) — хуже (PPL 45.3), зафиксирован как negative result.
 
 ## 16. Remaining Questions
 
