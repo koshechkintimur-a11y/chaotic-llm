@@ -18,3 +18,4 @@ test_save.pt
 # OS
 .DS_Store
 Thumbs.db
+phase01/exp30_utility_gate/results/exp30_extracted.npz
