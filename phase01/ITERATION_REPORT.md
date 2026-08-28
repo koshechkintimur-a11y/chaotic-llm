@@ -105,9 +105,38 @@ predictors, without conditional execution.
   gate (max safe skip 5%), utility-gated execution (0.96× — net loss).
   Root cause: memory too expensive for a gate. **Successfully passed —
   the failure was in the gate premise, not the memory.**
-- **exp31 (positive, new track)**: cheap sparse-MLE memory — 93% of quality
-  at 17× cost, no gate needed.
+- **exp31 (positive, pivot)**: cheap sparse-MLE memory — 93% of quality at
+  17× cost, no gate needed.
+- **exp33 (cleared)**: hierarchical backoff costs 7× for 2.3 PPL — not worth
+  it. The gap must be closed elsewhere.
+- **exp34 (cleared)**: joint training with fused loss breaks the mixer
+  (mixer-only 4888 vs 62.7) — mixer must stay standalone.
+- **exp35/36 (THE result)**: confidence-gated β(c_h) = c_h/(c_h+k), one
+  free parameter, turns cheap sparse memory into a STRICT improvement over
+  full KN on both domains.
 
-**The solution was there all along**: don't gate an expensive memory —
-make the memory cheap. Next: NL validation, cheap backoff, generation
-demo, full architecture wall-clock.
+## Architecture v0.7 — final form
+
+```
+chaotic compute (standalone mixer, 90K params)  — always, O(W log W)
+sparse MLE memory (observed continuations)      — always, 9-17× cheaper than KN
+β(c_h) = c_h/(c_h + k)                          — confidence gate, 1 param, free
+```
+
+| Domain | mixer-only | +full KN | +sparse fixed β | **+sparse β(c_h)** |
+|---|---|---|---|---|
+| Code | 32.78 | 10.94 | 11.66 | **8.59** |
+| NL (WikiText-2) | 62.69 | 23.21 | 28.28 | **18.85** |
+
+**β(c_h) sparse memory beats full Kneser-Ney on both domains — at 9-17×
+lower memory cost, unconditionally (no gate, no conditional execution, no
+learned controller).** This is the strongest result of the project.
+
+## The solution was there all along
+
+The three blocked tracks assumed memory must be expensive (V-dim KN) and
+therefore gated. The actual answer: **don't gate an expensive memory — make
+the memory cheap (sparse MLE), and let a free confidence signal (c_h) set
+the fusion weight.** The single parameter c_h/(c_h+k) captures exactly what
+the learned controller (exp28) and utility gate (exp30) tried to predict —
+but it was already in the lookup, for free.
