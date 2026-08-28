@@ -1,0 +1,9 @@
+{
+  "mixer_only": 32.775441908711464,
+  "kn_baseline": 10.939242319835662,
+  "sparse_mle": 12.542838005721574,
+  "exact_match_best_ppl": 25.587253504353686,
+  "exact_match_best_top1": 0.3615,
+  "exact_match_gain_retained": 0.32918678798025447,
+  "sparse_mle_gain_retained": 0.9265625101401416
+}
