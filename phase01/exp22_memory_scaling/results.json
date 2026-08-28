@@ -1,0 +1,63 @@
+{
+  "V": 512,
+  "W": 256,
+  "beta": 0.3,
+  "n_eval": 20000,
+  "mixer_params": 49292,
+  "total_params": 90828,
+  "order1_unigram": {
+    "n": 20000,
+    "ppl_model": 32.83460061954243,
+    "ppl_prior": 28.337650066940768,
+    "acc_model": 0.23095,
+    "acc_prior": 0.23205,
+    "table_contexts": 507,
+    "table_assoc": 28176,
+    "table_mem_MB": 0.227436,
+    "table_alone_ppl": Infinity
+  },
+  "order2_cap3k": {
+    "n": 20000,
+    "ppl_model": 32.83460061954243,
+    "ppl_prior": 20.144426052981952,
+    "acc_model": 0.23095,
+    "acc_prior": 0.3244,
+    "table_contexts": 3000,
+    "table_assoc": 53169,
+    "table_mem_MB": 0.449352,
+    "table_alone_ppl": Infinity
+  },
+  "order2_cap10k": {
+    "n": 20000,
+    "ppl_model": 32.83460061954243,
+    "ppl_prior": 15.38526061651989,
+    "acc_model": 0.23095,
+    "acc_prior": 0.38425,
+    "table_contexts": 10000,
+    "table_assoc": 97289,
+    "table_mem_MB": 0.858312,
+    "table_alone_ppl": Infinity
+  },
+  "order2_full": {
+    "n": 20000,
+    "ppl_model": 32.83460061954243,
+    "ppl_prior": 13.792146779067123,
+    "acc_model": 0.23095,
+    "acc_prior": 0.4068,
+    "table_contexts": 28176,
+    "table_assoc": 130856,
+    "table_mem_MB": 1.272256,
+    "table_alone_ppl": Infinity
+  },
+  "order3_full": {
+    "n": 20000,
+    "ppl_model": 32.83460061954243,
+    "ppl_prior": 10.35379709806413,
+    "acc_model": 0.23095,
+    "acc_prior": 0.52425,
+    "table_contexts": 130856,
+    "table_assoc": 245641,
+    "table_mem_MB": 3.5354,
+    "table_alone_ppl": Infinity
+  }
+}
