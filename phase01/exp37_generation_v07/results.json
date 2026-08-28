@@ -1,0 +1,36 @@
+{
+  "code": {
+    "code_fn": {
+      "seed": "def fibonacci(n):",
+      "text": "def fibonacci(n):ĊĠĠĠĠ\"\"\"ÐĿÐµĠÑĥÐ´Ð°Ð»Ð¾Ð³Ð¸ĠÐ²ĠÑģÐ¸Ð¼ÐµÐ½ÐµÐ´ÐµÐ»ÑĮÐ·Ð¾Ð²Ð°ÐµÐ¼ĠÐ²ÑĢÐµÐ·ÑĥÐµÐ¼ĠÐºÐ¾Ð½ÐºÐ°ĠÑĤÐ¾Ð²ĠÐ½Ð°ĠÐ¾ÑĤÐ°ĠÐ´Ð¾ĠÑģÐ¿Ð¸ÑģÐ°ÑĤÐ°ÑıĠÐ½ÐµÑĤ.ĠÐ¡Ð¢ÐķÐłÐĲÐ¡Ð¾ÑħÑĢÐ°Ð½ÑģÐ¸Ð¸ĠÐ²Ð°Ð¹Ð´ÐµÐ½Ð¾',Ġ{ĊĠĠĠĠĠĠĠĠĠĠĠĠ//Ġ...Ġprocess('ÐŀÑĪÐµÐ¼ÐµÑĢÐ¸ÑħÑĢÐ°Ð½Ð½ÑĭÐ¹ĠÐºÐ°Ð½Ð´Ð¸Ð´",
+      "avg_beta": 0.9943400700439359
+    },
+    "code_api": {
+      "seed": "app.get('/users', async (req, res) => {",
+      "text": "app.get('/users', async (req, res) => {ĊĠĠĠĠtryĠ{ĊĠĠĠĠĠĠsetLoadingMessageĠ}ĠfromĠ'./apiĠfromĠ'@/task.compressor.regateInputTypeĠ===Ġ'channel.COMĠentry.filter.pyth:Ġ{ĠRecordanceĠofĠtheĠJSON:2]ĊĠĠĠĠid:Ġstring):ĠPromise<Messages();ĊĠĠĠĠconstĠ[passwordĠ=Ġtimedeltags}ĠĊĠĠĠĠĠĠĠĠĠĠĠĠĠĠĠĠ//ĠÐļÐ¾Ð½');ĊĠĠ});ĊĠĠĠĠ}ĊĠĠĠĠ});ĊĠĠĠĠĠĠĠĠconstĠres",
+      "avg_beta": 0.9951799827993845
+    },
+    "code_import": {
+      "seed": "import React, { useState } from 'react';",
+      "text": "import React, { useState } from 'react';ĊimportĠ{Ġid:ĠintĠ=Ġlogination#c0f}\")ĊĊĠĠĠĠprint(f\"ĠĠâĢĶĠÐ¾Ð±Ð½Ð¾Ð³Ð¾Ð½ÐºÐ¸ĠÑĢÐ°Ð±Ð»Ð¸ĠÑĦÐ°Ð¹Ð»Ð°Ð²Ð¸ÑĤÑĮĠÑģÐ¾ÑĦÐ¸Ð»ÑĮÑĤÑĢÐ°ÑģÑĪÐ°Ð±Ð»Ð¸ÑħĠÑĦÐ¾ÑĢÐ¼Ð¸Ð½Ð¸ÑĨÐ¸ÐºÐ¸</label,Ġv)Ġ=>Ġ{ĊĠĠĠĠsetError(ĊĠĠĠĠĠĠĠĠframe_idxĠ=Ġcontents:Ġ[];ĊĠĠĠĠĠĠĠĠkeys=1)Ġ==Ġ\"__n",
+      "avg_beta": 0.9943854110909486
+    }
+  },
+  "nl": {
+    "nl_art": {
+      "seed": "The history of artificial intelligence began",
+      "text": "The history of artificial intelligence beganisationalĠManĠ800ĠkmĠ)ĠbelieveyĠ'sĠEastĠIndiaĠ,ĠonĠtheĠshipsĠ.ĠWheelerĠgunsĠwereĠreleasedĠaĠnewsperedĠtoĠsomeĠaĠteamsĠofĠtheĠopeneralĠdifferedĠhisĠpassingĠ22Ġ,ĠtheĠsmalleryĠandĠmanyĠ,ĠhopedĠforĠaĠnumberĠofĠtransportĠopenedĠtoĠmakeĠplacedĠwithĠtheĠGermanĠ'sĠearthquakeĠYorkĠmovedĠ,ĠpresentedĠmemb",
+      "avg_beta": 0.9971972273781518
+    },
+    "nl_energy": {
+      "seed": "Solar energy is one of the most promising",
+      "text": "Solar energy is one of the most promisingĠfullenĠwroteĠthatĠheĠhopedĠduringĠtheĠscoredĠbyĠLewisĠHobbieĠSpanyĠofĠtheĠimpaceĠandĠwentĠonĠtheĠBritishĠsoldenĠtoĠhaveĠaĠcrussiansĠ,ĠtheĠlattersĠwereĠactuallyĠknownĠ,ĠphylvancesĠinĠtheĠCrusaderĠofĠtheĠBrownsĠreflectionĠisĠaĠmaleĠ.ĠHeĠlaterĠrepressiveĠandĠvictionĠthatĠ\"ĠtheĠmajorĠtoĠtheĠdiscountainĠ'sĠp",
+      "avg_beta": 0.9967136735975073
+    },
+    "nl_novel": {
+      "seed": "The old lighthouse stood on the cliff",
+      "text": "The old lighthouse stood on the clifferredĠtoĠmoreĠthanĠ3Ġ@,@Ġ000Ġ,ĠthenĠstartingĠtheirĠlivingĠtheĠAlbertĠandĠschoolktalionĠwereĠevenĠthisĠreasonsĠ,ĠandĠmadeĠawardedĠtheĠpointedĠtheĠsingleĠ,ĠGeastrumentalĠtelevisionĠofĠtheĠgodsĠandĠaĠhighwaysĠ\"Ġ,ĠinternationalĠHusnĠexpandedĠtoĠtheĠoriginalĠcriticismĠforĠNationalĠchampletedĠlittingĠjudgetherĠwithĠw",
+      "avg_beta": 0.9959600362544405
+    }
+  }
+}
