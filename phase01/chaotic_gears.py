@@ -38,6 +38,8 @@ class ChaoticBlock(nn.Module):
 
     def _chaotic(self, h, sigmas, gates):
         B, N, d = h.shape
+        if N < 2:
+            return h  # single element — no pairing possible
         for t in range(1, len(gates) + 1):
             h = h[:, sigmas[t].to(h.device), :]
             g = torch.sigmoid(gates[t - 1])
