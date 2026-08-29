@@ -1,0 +1,36 @@
+{
+  "MEM0": {
+    "config": "MEM0 (order-3)",
+    "entries": 27386,
+    "bytes": 559978,
+    "ctx_len": 3,
+    "miss_rate": 0.4024,
+    "length_dist": {}
+  },
+  "MEM_A": {
+    "config": "MEM_A (order-8)",
+    "entries": 11007,
+    "bytes": 183810,
+    "ctx_len": 8,
+    "miss_rate": 0.896,
+    "length_dist": {}
+  },
+  "MEM_B": {
+    "config": "MEM_B (content-addr 8..16)",
+    "entries": 197447,
+    "bytes": 2976430,
+    "ctx_len": 16,
+    "miss_rate": 0.8532,
+    "length_dist": {
+      "8": 28416,
+      "9": 26501,
+      "10": 24671,
+      "11": 23003,
+      "12": 21462,
+      "13": 20052,
+      "14": 18811,
+      "15": 17743,
+      "16": 16788
+    }
+  }
+}
