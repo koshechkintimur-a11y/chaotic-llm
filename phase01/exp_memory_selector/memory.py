@@ -175,6 +175,7 @@ class HybridMemory:
         self.local = BaseMemory(order=local_order, min_count=min_count)
         self.global_mem = ContentAddressableMemory(min_len, max_len, min_count)
         self.alpha = alpha
+        self.ctx_len = max(self.local.ctx_len, self.global_mem.ctx_len)
 
     def build(self, train_ids):
         self.local.build(train_ids)

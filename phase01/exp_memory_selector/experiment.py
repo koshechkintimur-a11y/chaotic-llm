@@ -29,9 +29,9 @@ sys.path.insert(0, REPO)
 VOCAB = 512
 W = 256
 D = 128
-BLOCKS = 8
+BLOCKS = 4
 BATCH = 64
-STEPS = 8000
+STEPS = 6000
 LR = 5e-4
 WARMUP = 1000
 MAX_TRAIN = 990_000
@@ -221,7 +221,8 @@ def eval_model(model, memory, name):
     gated = {}
     for kb in [0.5, 1.0, 2.0]:
         nll = np.zeros(N_EVAL)
-        miss = 0
+        q_miss = 0          # pattern not found at all
+        t_miss = 0          # pattern found but target token not in it
         for k in range(N_EVAL):
             i = te_starts[k]
             ctx = tuple(test_ids[i+W-ctx_len:i+W])
@@ -235,10 +236,15 @@ def eval_model(model, memory, name):
                         beta = tot / (tot + kb)
                         nll[k] = -np.logaddexp(np.log1p(-beta) + pm, np.log(beta) + np.log(c/tot))
                         continue
-            miss += 1
+                    else:
+                        t_miss += 1
+                else:
+                    q_miss += 1
             nll[k] = -pm
         gated[kb] = float(np.exp(np.mean(nll)))
-    return {"mixer_only": mixer_only, "gated": gated, "miss_rate": miss / N_EVAL}
+    return {"mixer_only": mixer_only, "gated": gated,
+            "query_miss": q_miss / N_EVAL, "target_miss": t_miss / N_EVAL,
+            "coverage": 1.0 - (q_miss + t_miss) / N_EVAL}
 
 
 if __name__ == "__main__":
@@ -259,5 +265,7 @@ if __name__ == "__main__":
     if memory is not None:
         print(f"[{args.config}] mem_entries={memory.n_entries():,} bytes={memory.size_bytes():,}")
     print(f"[{args.config}] params={params:,} mixer_only={res['mixer_only']:.3f} "
-          f"gated(k=1)={res['gated'][1.0]:.3f} miss={res['miss_rate']:.3f}", flush=True)
+          f"gated(k=1)={res['gated'][1.0]:.3f} "
+          f"q_miss={res['query_miss']:.3f} t_miss={res['target_miss']:.3f} "
+          f"cov={res['coverage']:.3f}", flush=True)
     json.dump(res, open(os.path.join(HERE, f"results_{args.config}.json"), "w"), indent=2)
