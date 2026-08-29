@@ -213,6 +213,7 @@ class RandomMemory:
     def __init__(self, order=8, min_count=3, seed=0):
         self.base = BaseMemory(order=order, min_count=min_count)
         self.rng = random.Random(seed)
+        self.ctx_len = order
 
     def build(self, train_ids):
         self.base.build(train_ids)

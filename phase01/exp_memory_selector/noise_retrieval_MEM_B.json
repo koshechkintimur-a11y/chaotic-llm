@@ -1,5 +1,5 @@
 {
-  "config": "MEM0",
+  "config": "MEM_B",
   "keys": [
     172,
     359,
@@ -12,19 +12,19 @@
       "acc1": 0.0,
       "acc5": 0.0,
       "acc10": 0.0,
-      "tested": 1
+      "tested": 0
     },
     "W64_noise990": {
       "acc1": 0.0,
       "acc5": 0.0,
       "acc10": 0.0,
-      "tested": 2
+      "tested": 0
     },
     "W64_noise995": {
-      "acc1": 0.2857,
-      "acc5": 0.4286,
-      "acc10": 0.4286,
-      "tested": 7
+      "acc1": 0.0,
+      "acc5": 0.0,
+      "acc10": 0.0,
+      "tested": 0
     },
     "W128_noise950": {
       "acc1": 0.0,
@@ -33,40 +33,40 @@
       "tested": 0
     },
     "W128_noise990": {
-      "acc1": 0.5,
-      "acc5": 0.5,
-      "acc10": 0.5,
-      "tested": 6
+      "acc1": 0.0,
+      "acc5": 0.0,
+      "acc10": 0.0,
+      "tested": 0
     },
     "W128_noise995": {
-      "acc1": 0.5,
-      "acc5": 0.5,
-      "acc10": 0.5,
-      "tested": 4
+      "acc1": 0.0,
+      "acc5": 0.0,
+      "acc10": 0.0,
+      "tested": 0
     },
     "W256_noise950": {
-      "acc1": 0.4,
-      "acc5": 0.4,
-      "acc10": 0.4,
-      "tested": 5
+      "acc1": 0.0,
+      "acc5": 0.0,
+      "acc10": 0.0,
+      "tested": 0
     },
     "W256_noise990": {
       "acc1": 0.0,
       "acc5": 0.0,
       "acc10": 0.0,
-      "tested": 1
+      "tested": 0
     },
     "W256_noise995": {
-      "acc1": 0.2,
-      "acc5": 0.6,
-      "acc10": 0.6,
-      "tested": 5
+      "acc1": 0.0,
+      "acc5": 0.0,
+      "acc10": 0.0,
+      "tested": 0
     },
     "W512_noise950": {
-      "acc1": 0.3333,
-      "acc5": 0.6667,
-      "acc10": 0.6667,
-      "tested": 6
+      "acc1": 0.0,
+      "acc5": 0.0,
+      "acc10": 0.0,
+      "tested": 0
     },
     "W512_noise990": {
       "acc1": 0.0,
@@ -78,7 +78,7 @@
       "acc1": 0.0,
       "acc5": 0.0,
       "acc10": 0.0,
-      "tested": 5
+      "tested": 0
     }
   }
 }
