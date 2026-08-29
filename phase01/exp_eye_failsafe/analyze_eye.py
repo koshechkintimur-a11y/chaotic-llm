@@ -96,6 +96,47 @@ def viz_E2(model, ids, keypos, keyid):
             "cluster_size": len(members), "standout": n_stand, "noise": n_noise}
 
 
+def _tok_type(t):
+    if 100 <= t <= 511:
+        return "S"          # standout (KEY or question)
+    return "."              # noise (1..10)
+
+
+def viz_E2_clusters(model, ids, keypos, keyid):
+    """Show cluster composition: which tokens (KEY/question/noise) land together."""
+    model.eval()
+    x = torch.tensor([ids], device=DEVICE)
+    with torch.no_grad():
+        model(x)
+        assign = model._assign[0].cpu().numpy()
+    clusters = {}
+    for i in range(W):
+        clusters.setdefault(int(assign[i]), []).append(i)
+    print(f"\n=== E2 clusters (KEY id={keyid} pos {keypos}) ===")
+    print(f"{'cl':>3} {'size':>4}  {'S':>2} {'n':>3}  members (tok[type])")
+    for c in sorted(clusters):
+        mem = clusters[c]
+        toks = [ids[m] for m in mem]
+        n_s = sum(1 for t in toks if _tok_type(t) == "S")
+        n_n = len(mem) - n_s
+        # show up to 12 members; mark KEY position
+        shown = []
+        for m in mem[:12]:
+            tag = "K" if m == keypos else _tok_type(ids[m])
+            shown.append(f"{ids[m]}{tag}")
+        tail = f" ...+{len(mem)-12}" if len(mem) > 12 else ""
+        mark = " <-- KEY" if keypos in mem else ""
+        print(f"{c:>3} {len(mem):>4}  {n_s:>2} {n_n:>3}  " + ", ".join(shown) + tail + mark)
+    # detailed KEY cluster
+    kc = int(assign[keypos])
+    mem = clusters[kc]
+    key_with = [(ids[m], "K" if m == keypos else _tok_type(ids[m])) for m in mem]
+    print(f"\nKEY cluster {kc} ({len(mem)} tokens): " +
+          ", ".join(f"{t}{tag}" for t, tag in key_with))
+    return {"key_cluster": kc, "cluster_sizes": {c: len(clusters[c]) for c in clusters},
+            "key_cluster_members": key_with}
+
+
 def main():
     ids, keypos, keyid = make_key_example()
     print(f"KEY example: KEY id={keyid} at pos {keypos}, W={W} "
@@ -116,6 +157,8 @@ def main():
                   f"likely architecture mismatch (re-run that config with current models.py)")
             continue
         res[cfg] = viz_E1(m, ids, keypos, keyid) if cfg.startswith("E1") else viz_E2(m, ids, keypos, keyid)
+        if cfg.startswith("E2"):
+            res[cfg + "_clusters"] = viz_E2_clusters(m, ids, keypos, keyid)
     with open(os.path.join(HERE, "analyze_key.json"), "w") as f:
         json.dump(res, f, indent=2)
     print("\nsaved analyze_key.json")

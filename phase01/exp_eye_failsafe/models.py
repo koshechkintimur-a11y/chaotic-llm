@@ -142,6 +142,7 @@ class EyeGroupLM(nn.Module):
         self.base = BidirectionalMixer(seed=0)
         self.groups = nn.ModuleList([BidirectionalMixer(seed=i + 1) for i in range(K)])
         self.mode = mode
+        self.K = K
         self.eye = nn.Linear(D, K)
         self.gate = nn.Parameter(torch.zeros(1))
         self.C = W // K
@@ -155,17 +156,15 @@ class EyeGroupLM(nn.Module):
         self._logits = None
 
     def _group_mix(self, e, assign):
+        # Each cluster k mixed by its own full-W mixer, but fed only its own
+        # tokens (others masked to zero). Output taken at own positions.
         B, W_, D = e.shape
         out = torch.zeros_like(e)
-        for k in range(self.K if hasattr(self, 'K') else K):
-            idx = (assign == k)
-            for b in range(B):
-                pos = idx[b].nonzero(as_tuple=False).flatten()
-                if pos.numel() == 0:
-                    continue
-                chunk = e[b, pos].unsqueeze(0)
-                mixed = self.groups[k](chunk)
-                out[b, pos] = mixed[0, :pos.numel()]
+        for k in range(self.K):
+            mask = (assign == k).unsqueeze(-1).float()          # (B,W,1)
+            masked = e * mask                                    # zero out other clusters
+            mixed = self.groups[k](masked)                       # full-W chaotic mix
+            out = out + mixed * mask                             # keep own positions only
         return out
 
     def forward(self, x):
@@ -180,8 +179,9 @@ class EyeGroupLM(nn.Module):
         return self.head.head(h)
 
     def balance_loss(self):
-        if self._logits is None:
+        if self._assign is None or self._logits is None:
             return torch.tensor(0.0)
-        P = torch.softmax(self._logits, dim=-1)
-        f = P.mean(dim=1)
-        return K * (f * P.mean(dim=0)).sum()
+        P = torch.softmax(self._logits, dim=-1)                     # (B,W,K)
+        f = torch.stack([(self._assign == k).float().mean() for k in range(self.K)])  # (K,) token fraction
+        pk = P.mean(dim=(0, 1))                                     # (K,) avg prob per cluster
+        return self.K * (f * pk).sum()
