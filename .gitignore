@@ -19,3 +19,7 @@ test_save.pt
 .DS_Store
 Thumbs.db
 phase01/exp30_utility_gate/results/exp30_extracted.npz
+
+# 5M merged corpus (built from private sources, do not commit)
+phase01/corpus5m_train.txt
+phase01/corpus5m_test.txt
