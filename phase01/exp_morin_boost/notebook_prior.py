@@ -120,6 +120,7 @@ def main():
     ap.add_argument("--n-test", type=int, default=5000)
     ap.add_argument("--beta", type=float, default=0.3)
     ap.add_argument("--warmup", type=int, default=500, help="positions before notebook activates")
+    ap.add_argument("--max-entries", type=int, default=200_000)
     args = ap.parse_args()
 
     from exp_memory_selector.experiment import build_tokenizer
@@ -159,7 +160,7 @@ def main():
     idx = rng.choice(n, size=min(args.n_test, n), replace=False)
 
     # one pass over test; notebook accumulates online (recency signal)
-    nb = NotebookPrior(max_entries=200_000)
+    nb = NotebookPrior(max_entries=args.max_entries)
     stats = {"nb0": [0, 0], "nb1": [0, 0], "nb2": [0, 0]}
     nll = {"nb0": 0.0, "nb1": 0.0, "nb2": 0.0}
     acc = {"nb0": 0, "nb1": 0, "nb2": 0}
