@@ -391,24 +391,43 @@ class CRTObserverModule(nn.Module):
 
 
 class H3CRTMixer(nn.Module):
-    """H3: микшер (чёрная дыра, смысл) + КТО-наблюдатель ПЕРЕД горизонтом
-    (позиции, точная идентичность). Readout = concat[последний из дыры,
-    КТО-запись] + проекция, чтобы сохранить ёмкость ~ DP."""
-    def __init__(self, d_ccap, vocab=VOCAB, blocks=BLOCKS, primes=(3, 5, 7, 11)):
+    """H3-fix: микшер (чёрная дыра, смысл) + КТО-наблюдатель ПЕРЕД горизонтом.
+    ФИКС по принципу «не сжимать в вектор» (crt_probe2): корзины остатков
+    остаются РАЗДЕЛЬНЫМИ до readout — каждая получает свою малую проекцию
+    (d_crt=16), НЕ сливаются в один вектор. 416 структурированных признаков."""
+    def __init__(self, d_ccap, vocab=VOCAB, blocks=BLOCKS, primes=(3, 5, 7, 11),
+                 d_crt=16):
         super().__init__()
         self.embed = nn.Embedding(vocab, d_ccap)
         self.pos = nn.Parameter(torch.randn(1, W, d_ccap) * 0.02)
         self.mixer = BidirectionalMixer(d=d_ccap, seed=0, blocks=blocks)
-        self.crt = CRTObserverModule(d_ccap, primes=primes)
-        # проекция КТО-записи в d_ccap (из sum(p)*d), чтобы readout был дёшев
-        self.crt_proj = nn.Linear(self.crt.out_dim, d_ccap)
-        self.readout = nn.Sequential(nn.Linear(2 * d_ccap, d_ccap),
-                                     nn.ReLU(), nn.Linear(d_ccap, vocab))
+        self.primes = primes
+        self.n_buckets = sum(primes)
+        # per-bucket shared projection: keep buckets SEPARATE (not one vector)
+        self.bucket_proj = nn.Linear(d_ccap, d_crt)
+        self.readout = nn.Sequential(
+            nn.Linear(d_ccap + self.n_buckets * d_crt, d_ccap),
+            nn.ReLU(), nn.Linear(d_ccap, vocab))
+
+    def _crt_buckets(self, e):
+        B, W, d = e.shape
+        outs = []
+        for p in self.primes:
+            buckets = torch.zeros(B, p, d, device=e.device)
+            counts = torch.zeros(B, p, 1, device=e.device)
+            idx = torch.arange(W, device=e.device) % p
+            buckets.scatter_add_(1, idx.unsqueeze(0).unsqueeze(-1).expand(B, W, d), e)
+            counts.scatter_add_(1, idx.unsqueeze(0).unsqueeze(-1).expand(B, W, 1),
+                                torch.ones(B, W, 1, device=e.device))
+            outs.append(buckets / counts.clamp(min=1))      # [B, p, d]
+        return torch.cat(outs, dim=1)                        # [B, sum(p), d]
 
     def forward(self, x):
         e = self.embed(x) + self.pos              # [B,W,d]
         mixed = self.mixer(e)                     # чёрная дыра (смысл)
-        rec = torch.relu(self.crt_proj(self.crt(e)))   # КТО-запись позиций (pre-chaos)
+        buckets = self._crt_buckets(e)            # [B, sum(p), d] — ДО хаоса
+        # каждая корзина отдельно -> малая проекция -> плоский (структура сохранена)
+        rec = self.bucket_proj(buckets).reshape(buckets.shape[0], -1)
         return self.readout(torch.cat([mixed[:, -1, :], rec], dim=-1))
 
 
