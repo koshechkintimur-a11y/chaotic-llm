@@ -89,17 +89,20 @@ class ChaoticBlock(nn.Module):
 
 
 class BidirectionalMixer(nn.Module):
-    """Stack of ChaoticBlocks (bidirectional mixing)."""
+    """Stack of ChaoticBlocks (bidirectional mixing) with pre-norm + residual
+    for deep stability (32+ layers would otherwise explode)."""
     def __init__(self, D=128, BLOCKS=4, LAYERS=1, n_tokens=256):
         super().__init__()
         self.D = D
+        self.n_tokens = n_tokens
         self.blocks = nn.ModuleList([
             ChaoticBlock(D, n_tokens) for _ in range(BLOCKS * LAYERS)
         ])
+        self.norms = nn.ModuleList([nn.LayerNorm(D) for _ in range(BLOCKS * LAYERS)])
 
     def forward(self, X):
-        for blk in self.blocks:
-            X = blk(X)
+        for blk, norm in zip(self.blocks, self.norms):
+            X = X + blk(norm(X))
         return X
 
 
@@ -161,39 +164,21 @@ def count_params(model):
     return sum(p.numel() for p in model.parameters())
 
 
-def build_matched_pair(budget_m, V=512, W=256, heads=8, d_tf=256):
-    """Build (chaos_model, tf_model) with ~equal param count near budget_m (millions)."""
-    # Transformer: scale layers to hit budget
-    def tf_params(layers):
-        return count_params(TransformerLM(V, W, D=d_tf, HEADS=heads, LAYERS=layers))
-    # bisect layers for transformer
-    lo, hi = 1, 200
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if tf_params(mid) < budget_m * 1_000_000:
-            lo = mid + 1
-        else:
-            hi = mid
-    tf_layers = max(1, lo)
-    tf_model = TransformerLM(V, W, D=d_tf, HEADS=heads, LAYERS=tf_layers)
-    tf_p = count_params(tf_model)
-    # Chaos: same budget, pick D and layers
-    # use D=d_tf, bisect chaos layers to match tf_p
-    def chaos_params(layers):
-        return count_params(ChaoticMixerLM(V, W, D=d_tf, BLOCKS_PER_LAYER=4, LAYERS=layers))
-    lo, hi = 1, 500
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if chaos_params(mid) < tf_p:
-            lo = mid + 1
-        else:
-            hi = mid
-    chaos_layers = max(1, lo)
-    chaos_model = ChaoticMixerLM(V, W, D=d_tf, BLOCKS_PER_LAYER=4, LAYERS=chaos_layers)
-    return chaos_model, tf_model, chaos_layers, tf_layers
+def build_matched_pair(budget_m, V=512, W=256, heads=8, tf_layers=12, chaos_layers=12):
+    """Build (chaos_model, tf_model) with ~equal param count near budget_m (millions).
+    Fixed depth=12; width D chosen from precomputed table to hit the budget."""
+    # precomputed D for budget (from sweep): chaos/tf D for 50M and 100M
+    table = {
+        50: (384, 576),   # (chaos_D, tf_D)
+        100: (576, 832),
+    }
+    cd, td = table.get(budget_m, (384, 576))
+    chaos_model = ChaoticMixerLM(V, W, D=cd, BLOCKS_PER_LAYER=4, LAYERS=chaos_layers)
+    tf_model = TransformerLM(V, W, D=td, HEADS=heads, LAYERS=tf_layers)
+    return chaos_model, tf_model, cd, td
 
 
 if __name__ == "__main__":
     for budget in [50, 100]:
-        cm, tm, cl, tl = build_matched_pair(budget)
-        print(f"[{budget}M budget] chaos_layers={cl} ({count_params(cm):,}) | tf_layers={tl} ({count_params(tm):,})")
+        cm, tm, d_c, d_t = build_matched_pair(budget)
+        print(f"[{budget}M budget] chaos D={d_c} ({count_params(cm):,}) | tf D={d_t} L=12 ({count_params(tm):,})")
