@@ -64,7 +64,8 @@ class BidirectionalMixer(nn.Module):
 
 # ================ DP — Distributed Prior ================
 class DPMixer(nn.Module):
-    """DP: prior-embedding propagates through SAME permutations as tokens (П1)."""
+    """DP: prior-embedding propagates through SAME permutations as tokens (П1).
+    Readout matches baseline MemMixerLM: last token + global mean pool."""
     def __init__(self, vocab=VOCAB, d=D, prior_dim=PRIOR_DIM, blocks=BLOCKS):
         super().__init__()
         self.embed = nn.Embedding(vocab, d)
@@ -74,14 +75,17 @@ class DPMixer(nn.Module):
         self.mixer_x = BidirectionalMixer(d=d, seed=0, blocks=blocks)
         # prior mixer with SAME permutation seeds (seed=0) — П1
         self.mixer_p = BidirectionalMixer(d=prior_dim, seed=0, blocks=blocks)
-        self.readout = nn.Linear(d + prior_dim, vocab)
+        self.readout = nn.Sequential(nn.Linear(2 * (d + prior_dim), d),
+                                     nn.ReLU(), nn.Linear(d, vocab))
 
     def forward(self, x):
         e = self.embed(x) + self.pos          # [B,W,d]
         p = self.prior_embed(x)               # [B,W,prior_dim]
         x_m = self.mixer_x(e)                 # token mixing
         p_m = self.mixer_p(p)                 # prior propagates through chaos
-        return self.readout(torch.cat([x_m, p_m], dim=-1))[:, -1, :]
+        h = torch.cat([x_m, p_m], dim=-1)     # [B,W,d+prior_dim]
+        g = h.mean(dim=1)                     # global pool
+        return self.readout(torch.cat([h[:, -1, :], g], dim=-1))
 
 
 # ================ DP-noprop (no propagation, static prior) ================
@@ -94,13 +98,16 @@ class DPNoPropMixer(nn.Module):
         self.pos = nn.Parameter(torch.randn(1, W, d) * 0.02)
         self.mixer_x = BidirectionalMixer(d=d, seed=0, blocks=blocks)
         # NO mixer_p — prior stays static (per-position)
-        self.readout = nn.Linear(d + prior_dim, vocab)
+        self.readout = nn.Sequential(nn.Linear(2 * (d + prior_dim), d),
+                                     nn.ReLU(), nn.Linear(d, vocab))
 
     def forward(self, x):
         e = self.embed(x) + self.pos
         p = self.prior_embed(x)               # no propagation
         x_m = self.mixer_x(e)
-        return self.readout(torch.cat([x_m, p], dim=-1))[:, -1, :]
+        h = torch.cat([x_m, p], dim=-1)
+        g = h.mean(dim=1)
+        return self.readout(torch.cat([h[:, -1, :], g], dim=-1))
 
 
 # ================ DP-rand (frozen random prior) ================
@@ -117,31 +124,36 @@ class DPRandMixer(nn.Module):
         self.pos = nn.Parameter(torch.randn(1, W, d) * 0.02)
         self.mixer_x = BidirectionalMixer(d=d, seed=0, blocks=blocks)
         self.mixer_p = BidirectionalMixer(d=prior_dim, seed=0, blocks=blocks)
-        self.readout = nn.Linear(d + prior_dim, vocab)
+        self.readout = nn.Sequential(nn.Linear(2 * (d + prior_dim), d),
+                                     nn.ReLU(), nn.Linear(d, vocab))
 
     def forward(self, x):
         e = self.embed(x) + self.pos
         p = self.prior_embed(x)               # frozen, random, no grad
         x_m = self.mixer_x(e)
         p_m = self.mixer_p(p)
-        return self.readout(torch.cat([x_m, p_m], dim=-1))[:, -1, :]
+        h = torch.cat([x_m, p_m], dim=-1)
+        g = h.mean(dim=1)
+        return self.readout(torch.cat([h[:, -1, :], g], dim=-1))
 
 
 # ================ C-cap (capacity control) ================
 class CcapMixer(nn.Module):
     """C-cap: same parameter count as DP, single mixer without prior (П2).
-    D is scaled up to match DP's total params."""
+    D is scaled up to match DP's total params. Readout like baseline."""
     def __init__(self, d_ccap, vocab=VOCAB, blocks=BLOCKS):
         super().__init__()
         self.embed = nn.Embedding(vocab, d_ccap)
         self.pos = nn.Parameter(torch.randn(1, W, d_ccap) * 0.02)
         self.mixer = BidirectionalMixer(d=d_ccap, seed=0, blocks=blocks)
-        self.readout = nn.Linear(d_ccap, vocab)
+        self.readout = nn.Sequential(nn.Linear(2 * d_ccap, d_ccap),
+                                     nn.ReLU(), nn.Linear(d_ccap, vocab))
 
     def forward(self, x):
         e = self.embed(x) + self.pos
         h = self.mixer(e)
-        return self.readout(h[:, -1, :])
+        g = h.mean(dim=1)
+        return self.readout(torch.cat([h[:, -1, :], g], dim=-1))
 
 
 # ================ PM — Propagating Memory ================
@@ -163,7 +175,8 @@ class PropagatingPriorMixer(nn.Module):
             nn.init.zeros_(m.bias)
         nn.init.zeros_(self.prior_init.weight)
         nn.init.zeros_(self.prior_init.bias)
-        self.readout = nn.Linear(d + prior_dim, vocab)
+        self.readout = nn.Sequential(nn.Linear(2 * (d + prior_dim), d),
+                                     nn.ReLU(), nn.Linear(d, vocab))
 
     def forward(self, x):
         h = self.embed(x) + self.pos
@@ -171,7 +184,9 @@ class PropagatingPriorMixer(nn.Module):
         for mixer, update in zip(self.layers, self.prior_update):
             h = mixer(h)
             p = torch.tanh(p + update(h))           # residual prior accumulation
-        return self.readout(torch.cat([h, p], dim=-1))[:, -1, :]
+        hp = torch.cat([h, p], dim=-1)
+        g = hp.mean(dim=1)
+        return self.readout(torch.cat([hp[:, -1, :], g], dim=-1))
 
 
 # ================ SP — Swarm Prior ================

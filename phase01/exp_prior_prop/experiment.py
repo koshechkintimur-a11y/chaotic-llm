@@ -118,7 +118,9 @@ def eval_model(model, name):
             for k, i in enumerate(te_starts[s0:e]):
                 X[k] = test_ids[i:i+W]; y_te[s0+k] = test_ids[i+W]
             logits_te[s0:e] = model(torch.tensor(X, dtype=torch.long, device=DEVICE)).cpu().numpy()
-    ppl = float(np.exp(np.mean([-logits_te[k, y_te[k]] for k in range(N_EVAL)])))
+    # CRITICAL: convert raw logits to log-probs before computing PPL
+    lpm = torch.log_softmax(torch.tensor(logits_te), -1).numpy()
+    ppl = float(np.exp(np.mean([-lpm[k, y_te[k]] for k in range(N_EVAL)])))
     return ppl, logits_te, y_te
 
 
