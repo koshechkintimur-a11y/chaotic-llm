@@ -364,6 +364,54 @@ class ObserverMixer(nn.Module):
         return self.readout(torch.cat([mixed[:, -1, :], record], dim=-1))
 
 
+# ================ BLACK-HOLE H3: КТО-наблюдатель (мать узнаёт ребёнка) ================
+class CRTObserverModule(nn.Module):
+    """Наблюдатель перед горизонтом через Китайскую теорему об остатках.
+    Позиции кодируются остатками по взаимно-простым модулям (простые числа):
+    позиция i единственным образом восстанавливается из (i mod p_k).
+    Малые модули = локальная селекция, большие = глобальная (многомасштабность).
+    Зная остатки — знаем позицию (обратимость). O(W * sum p)."""
+    def __init__(self, d, primes=(3, 5, 7, 11, 13, 17)):
+        super().__init__()
+        self.primes = primes
+        self.out_dim = sum(primes) * d
+
+    def forward(self, e):
+        B, W, d = e.shape
+        outs = []
+        for p in self.primes:
+            buckets = torch.zeros(B, p, d, device=e.device)
+            counts = torch.zeros(B, p, 1, device=e.device)
+            idx = torch.arange(W, device=e.device) % p
+            buckets.scatter_add_(1, idx.unsqueeze(0).unsqueeze(-1).expand(B, W, d), e)
+            counts.scatter_add_(1, idx.unsqueeze(0).unsqueeze(-1).expand(B, W, 1),
+                                torch.ones(B, W, 1, device=e.device))
+            outs.append((buckets / counts.clamp(min=1)).reshape(B, p * d))
+        return torch.cat(outs, dim=-1)   # [B, sum(p)*d]
+
+
+class H3CRTMixer(nn.Module):
+    """H3: микшер (чёрная дыра, смысл) + КТО-наблюдатель ПЕРЕД горизонтом
+    (позиции, точная идентичность). Readout = concat[последний из дыры,
+    КТО-запись] + проекция, чтобы сохранить ёмкость ~ DP."""
+    def __init__(self, d_ccap, vocab=VOCAB, blocks=BLOCKS, primes=(3, 5, 7, 11)):
+        super().__init__()
+        self.embed = nn.Embedding(vocab, d_ccap)
+        self.pos = nn.Parameter(torch.randn(1, W, d_ccap) * 0.02)
+        self.mixer = BidirectionalMixer(d=d_ccap, seed=0, blocks=blocks)
+        self.crt = CRTObserverModule(d_ccap, primes=primes)
+        # проекция КТО-записи в d_ccap (из sum(p)*d), чтобы readout был дёшев
+        self.crt_proj = nn.Linear(self.crt.out_dim, d_ccap)
+        self.readout = nn.Sequential(nn.Linear(2 * d_ccap, d_ccap),
+                                     nn.ReLU(), nn.Linear(d_ccap, vocab))
+
+    def forward(self, x):
+        e = self.embed(x) + self.pos              # [B,W,d]
+        mixed = self.mixer(e)                     # чёрная дыра (смысл)
+        rec = torch.relu(self.crt_proj(self.crt(e)))   # КТО-запись позиций (pre-chaos)
+        return self.readout(torch.cat([mixed[:, -1, :], rec], dim=-1))
+
+
 def build_model(config, vocab=VOCAB, d=D):
     """Build model by config name, return (model, d_ccap_for_cap)."""
     if config == "DP":
@@ -416,6 +464,20 @@ def build_model(config, vocab=VOCAB, d=D):
                 hi = mid
         d_h2 = max(64, lo)
         return ObserverMixer(d_h2, vocab=vocab)
+    if config == "H3":
+        # CRT observer (mother finds child by multiple prime anchors)
+        dp = DPMixer(vocab=vocab, d=d)
+        dp_params = count_params(dp)
+        lo, hi = 64, 512
+        while lo < hi:
+            mid = (lo + hi) // 2
+            m = H3CRTMixer(mid, vocab=vocab)
+            if count_params(m) < dp_params:
+                lo = mid + 1
+            else:
+                hi = mid
+        d_h3 = max(64, lo)
+        return H3CRTMixer(d_h3, vocab=vocab)
     if config == "PM":
         return PropagatingPriorMixer(vocab=vocab, d=d)
     if config == "SP":
@@ -425,6 +487,6 @@ def build_model(config, vocab=VOCAB, d=D):
 
 if __name__ == "__main__":
     # quick sanity: param counts
-    for cfg in ["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "H1", "H2", "PM", "SP"]:
+    for cfg in ["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "H1", "H2", "H3", "PM", "SP"]:
         m = build_model(cfg, vocab=VOCAB)
         print(f"  {cfg:15s}: {count_params(m):>10,} params")
