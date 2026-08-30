@@ -209,7 +209,7 @@ def retrieval_accuracy(model, distances=(16, 64, 256, 1024), n_trials=200, noise
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("config", choices=["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "H1", "H2", "H3", "H3-RL", "H4", "PM", "SP"])
+    ap.add_argument("config", choices=["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "H1", "H2", "H3", "H3-RL", "H4", "H5", "PM", "SP"])
     ap.add_argument("steps", nargs="?", type=int, default=STEPS)
     args = ap.parse_args()
     if args.steps != STEPS:

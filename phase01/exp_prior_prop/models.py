@@ -480,6 +480,47 @@ class H4CRTDecoderMixer(nn.Module):
                                torch.log(b) + log_pc)    # log P_mix
 
 
+# ================ H5: фиксированный КТО-селектор в readout (Pure) ================
+class H5PureCRTSelector(nn.Module):
+    """H5: селектор КТО встроен в readout КАК ЕДИНСТВЕННАЯ детерминированная
+    агрегация — модель не может его «забыть» (в отличие от H3-fix, где readout
+    мог занулить CRT-путь). Корзины остатков по простым модулям, раздельные
+    суммы, проекция в d, объединение с последним токеном микшера."""
+    def __init__(self, d_ccap, vocab=VOCAB, blocks=BLOCKS, primes=(3, 5, 7, 11),
+                 d_crt=16):
+        super().__init__()
+        self.embed = nn.Embedding(vocab, d_ccap)
+        self.pos = nn.Parameter(torch.randn(1, W, d_ccap) * 0.02)
+        self.mixer = BidirectionalMixer(d=d_ccap, seed=0, blocks=blocks)
+        self.primes = primes
+        self.n_buckets = sum(primes)
+        self.bucket_proj = nn.Linear(d_ccap, d_crt)
+        # readout: КТО-агрегация (416) + последний токен микшера
+        self.readout = nn.Sequential(
+            nn.Linear(d_ccap + self.n_buckets * d_crt, d_ccap),
+            nn.ReLU(), nn.Linear(d_ccap, vocab))
+
+    def _crt_buckets(self, h):
+        B, W, d = h.shape
+        outs = []
+        for p in self.primes:
+            buckets = torch.zeros(B, p, d, device=h.device)
+            counts = torch.zeros(B, p, 1, device=h.device)
+            idx = torch.arange(W, device=h.device) % p
+            buckets.scatter_add_(1, idx.unsqueeze(0).unsqueeze(-1).expand(B, W, d), h)
+            counts.scatter_add_(1, idx.unsqueeze(0).unsqueeze(-1).expand(B, W, 1),
+                                torch.ones(B, W, 1, device=h.device))
+            outs.append(buckets / counts.clamp(min=1))
+        return torch.cat(outs, dim=1)                    # [B, sum(p), d]
+
+    def forward(self, x):
+        e = self.embed(x) + self.pos
+        mixed = self.mixer(e)                            # чёрная дыра
+        buckets = self._crt_buckets(e)                   # селектор НАД ВХОДОМ (проба: 100%)
+        rec = self.bucket_proj(buckets).reshape(buckets.shape[0], -1)
+        return self.readout(torch.cat([mixed[:, -1, :], rec], dim=-1))
+
+
 def build_model(config, vocab=VOCAB, d=D):
     """Build model by config name, return (model, d_ccap_for_cap)."""
     if config == "DP":
@@ -560,6 +601,20 @@ def build_model(config, vocab=VOCAB, d=D):
                 hi = mid
         d_h4 = max(64, lo)
         return H4CRTDecoderMixer(d_h4, vocab=vocab)
+    if config == "H5":
+        # fixed CRT selector in readout (Pure)
+        dp = DPMixer(vocab=vocab, d=d)
+        dp_params = count_params(dp)
+        lo, hi = 64, 512
+        while lo < hi:
+            mid = (lo + hi) // 2
+            m = H5PureCRTSelector(mid, vocab=vocab)
+            if count_params(m) < dp_params:
+                lo = mid + 1
+            else:
+                hi = mid
+        d_h5 = max(64, lo)
+        return H5PureCRTSelector(d_h5, vocab=vocab)
     if config == "PM":
         return PropagatingPriorMixer(vocab=vocab, d=d)
     if config == "SP":
@@ -569,6 +624,6 @@ def build_model(config, vocab=VOCAB, d=D):
 
 if __name__ == "__main__":
     # quick sanity: param counts
-    for cfg in ["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "H1", "H2", "H3", "H4", "PM", "SP"]:
+    for cfg in ["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "H1", "H2", "H3", "H4", "H5", "PM", "SP"]:
         m = build_model(cfg, vocab=VOCAB)
         print(f"  {cfg:15s}: {count_params(m):>10,} params")
