@@ -45,7 +45,27 @@ print(f"V={V} train={len(train_ids):,} test={len(test_ids):,}", flush=True)
 
 
 # ----------------------------------------------------------------- train
-def train(model, name):
+def make_retrieval_batch(rng, train_ids, W, V, n_batch, key_cands, distances):
+    """Батч с KEY на случайной дистанции L: модель учится ПРЕДСКАЗЫВАТЬ KEY
+    (явная retrieval-потеря — вариант 1 фикса КТО)."""
+    maxstart = len(train_ids) - W - 1
+    X = np.zeros((n_batch, W), dtype=np.int64)
+    Y = np.zeros(n_batch, dtype=np.int64)
+    for b in range(n_batch):
+        i = rng.integers(0, maxstart)
+        xb = train_ids[i:i + W].copy()
+        L = int(rng.choice(distances))
+        key = int(rng.choice(key_cands))
+        pos = W - L                       # KEY за L позиций до конца окна
+        if pos < 0:
+            pos = rng.integers(0, W)
+        xb[pos] = key
+        X[b] = xb
+        Y[b] = key                        # цель: предсказать KEY
+    return X, Y
+
+
+def train(model, name, retrieval_loss=False):
     params = sum(p.numel() for p in model.parameters())
     model = model.to(DEVICE)
     opt = torch.optim.Adam(model.parameters(), lr=LR)
@@ -58,20 +78,35 @@ def train(model, name):
 
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda)
     lossf = nn.CrossEntropyLoss()
+    import torch.nn.functional as F
     n = len(train_ids) - W - 1
     rng = np.random.default_rng(1)
     maxstart_v = len(train_ids) - W - 1
     val_starts = np.sort(rng.choice(maxstart_v, size=N_VAL, replace=False))
+    # кандидаты KEY: токены с частотой >= 20 (как в retrieval-тесте)
+    from collections import Counter
+    cnt = Counter(train_ids)
+    key_cands = [t for t, c in cnt.items() if c >= 20 and t > 0]
+    logprobs_out = name.startswith("H4")
     t0 = time.time()
     gap_log = []
     stopped = False
     for s in range(STEPS):
-        bi = np.random.randint(0, n, size=BATCH)
-        X = torch.tensor(np.stack([train_ids[i:i+W] for i in bi]), dtype=torch.long, device=DEVICE)
-        Y = torch.tensor([train_ids[i+W] for i in bi], dtype=torch.long, device=DEVICE)
+        if retrieval_loss and s % 2 == 1:
+            Xa, Ya = make_retrieval_batch(rng, train_ids, W, V, BATCH, key_cands,
+                                          distances=(16, 64, 128, 240))
+        else:
+            bi = np.random.randint(0, n, size=BATCH)
+            Xa = np.stack([train_ids[i:i + W] for i in bi])
+            Ya = np.array([train_ids[i + W] for i in bi])
+        X = torch.tensor(Xa, dtype=torch.long, device=DEVICE)
+        Y = torch.tensor(Ya, dtype=torch.long, device=DEVICE)
         opt.zero_grad()
         logits = model(X)
-        loss = lossf(logits, Y)
+        if logprobs_out:
+            loss = F.nll_loss(logits, Y)
+        else:
+            loss = lossf(logits, Y)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
@@ -118,8 +153,11 @@ def eval_model(model, name):
             for k, i in enumerate(te_starts[s0:e]):
                 X[k] = test_ids[i:i+W]; y_te[s0+k] = test_ids[i+W]
             logits_te[s0:e] = model(torch.tensor(X, dtype=torch.long, device=DEVICE)).cpu().numpy()
-    # CRITICAL: convert raw logits to log-probs before computing PPL
-    lpm = torch.log_softmax(torch.tensor(logits_te), -1).numpy()
+    # H4 уже возвращает log-probs (log P_mix) — не софтмаксить повторно
+    if name.startswith("H4"):
+        lpm = torch.tensor(logits_te)
+    else:
+        lpm = torch.log_softmax(torch.tensor(logits_te), -1)
     ppl = float(np.exp(np.mean([-lpm[k, y_te[k]] for k in range(N_EVAL)])))
     return ppl, logits_te, y_te
 
@@ -171,14 +209,15 @@ def retrieval_accuracy(model, distances=(16, 64, 256, 1024), n_trials=200, noise
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("config", choices=["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "H1", "H2", "H3", "PM", "SP"])
+    ap.add_argument("config", choices=["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "H1", "H2", "H3", "H3-RL", "H4", "PM", "SP"])
     ap.add_argument("steps", nargs="?", type=int, default=STEPS)
     args = ap.parse_args()
     if args.steps != STEPS:
         STEPS = args.steps
 
-    model = build_model(args.config, vocab=V)
-    params, gap_log, stopped = train(model, args.config)
+    rl = args.config == "H3-RL"
+    model = build_model("H3" if rl else args.config, vocab=V)
+    params, gap_log, stopped = train(model, args.config, retrieval_loss=rl)
     # save checkpoint for analyze_links.py
     torch.save(model.state_dict(), os.path.join(HERE, f"model_{args.config}.pt"))
     ppl, logits_te, y_te = eval_model(model, args.config)
