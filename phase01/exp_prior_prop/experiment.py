@@ -177,6 +177,8 @@ if __name__ == "__main__":
 
     model = build_model(args.config, vocab=V)
     params, gap_log, stopped = train(model, args.config)
+    # save checkpoint for analyze_links.py
+    torch.save(model.state_dict(), os.path.join(HERE, f"model_{args.config}.pt"))
     ppl, logits_te, y_te = eval_model(model, args.config)
     print(f"[{args.config}] params={params:,} PPL={ppl:.3f}", flush=True)
 
