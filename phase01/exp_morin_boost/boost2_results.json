@@ -1,0 +1,15 @@
+{
+  "model_ppl": 85.5014,
+  "T0_fixed03": 33.0908,
+  "T1_adaptive_kb1": 47.337,
+  "T3a_lenbeta_kb2": 28.3896,
+  "T3b_peak_gamma1": 32.639,
+  "T3b_peak_gamma2": 33.7609,
+  "ORACLE_best_beta": 15.82,
+  "ORACLE_prior_peek": 15.9111,
+  "n_test": 5000,
+  "prior_coverage": 1.0,
+  "mean_match_len": 4.216,
+  "mean_prior_peak": 0.6941,
+  "prior_hit_true_rate": 0.6072
+}

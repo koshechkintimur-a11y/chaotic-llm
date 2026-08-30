@@ -1,0 +1,20 @@
+[
+  {
+    "name": "T0_morin",
+    "n_test": 5000,
+    "ppl": 33.09084021430672,
+    "top1_acc": 0.419
+  },
+  {
+    "name": "T1_adaptive",
+    "n_test": 5000,
+    "ppl": 47.3370091841147,
+    "top1_acc": 0.4184
+  },
+  {
+    "name": "T2_learned_blend",
+    "n_test": 5000,
+    "ppl": 61.02636275051185,
+    "top1_acc": 0.1926
+  }
+]

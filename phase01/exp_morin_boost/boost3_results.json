@@ -1,0 +1,8 @@
+{
+  "n_test": 5000,
+  "model_ppl": 28.18,
+  "T0_fixed03": 9.6484,
+  "T3a_lenbeta": 6.9871,
+  "T3c_learned": 6.4859,
+  "ORACLE": 4.4532
+}
