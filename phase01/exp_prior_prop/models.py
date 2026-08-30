@@ -336,6 +336,34 @@ class H1HorizonMixer(nn.Module):
         return self.readout(torch.cat([h[:, -1, :], g], dim=-1))
 
 
+# ================ BLACK-HOLE H2: сторонний наблюдатель ПЕРЕД горизонтом ================
+class ObserverMixer(nn.Module):
+    """H2-наблюдатель: записывает ВХОД до чёрной дыры (pre-chaos), а не после.
+    Физика: наблюдатель, сообщающий что попало в дыру, должен быть ПЕРЕД
+    горизонтом. record = обучаемый проектор над входными эмбеддингами.
+    Вывод = readout(последний токен из дыры + запись наблюдателя)."""
+    def __init__(self, d_ccap, vocab=VOCAB, blocks=BLOCKS, obs_window=64):
+        super().__init__()
+        self.embed = nn.Embedding(vocab, d_ccap)
+        self.pos = nn.Parameter(torch.randn(1, W, d_ccap) * 0.02)
+        self.mixer = BidirectionalMixer(d=d_ccap, seed=0, blocks=blocks)
+        # наблюдатель перед горизонтом: лёгкий кодер окна + проектор над ВХОДОМ
+        self.obs_window = min(obs_window, W)
+        self.obs_conv = nn.Conv1d(d_ccap, d_ccap, kernel_size=3, padding=1)
+        self.obs_q = nn.Parameter(torch.randn(1, 1, d_ccap) * 0.02)
+        self.readout = nn.Sequential(nn.Linear(2 * d_ccap, d_ccap),
+                                     nn.ReLU(), nn.Linear(d_ccap, vocab))
+
+    def forward(self, x):
+        e = self.embed(x) + self.pos              # [B,W,d]
+        mixed = self.mixer(e)                     # чёрная дыра (хаос)
+        # наблюдатель: записывает ВХОД (pre-chaos), «растягивает» через conv
+        obs = torch.relu(self.obs_conv(e.transpose(1, 2))).transpose(1, 2)
+        w = torch.softmax((obs * self.obs_q).sum(-1, keepdim=True), dim=1)
+        record = (obs * w).sum(dim=1)             # запись перед горизонтом
+        return self.readout(torch.cat([mixed[:, -1, :], record], dim=-1))
+
+
 def build_model(config, vocab=VOCAB, d=D):
     """Build model by config name, return (model, d_ccap_for_cap)."""
     if config == "DP":
@@ -374,6 +402,20 @@ def build_model(config, vocab=VOCAB, d=D):
                 hi = mid
         d_h1 = max(64, lo)
         return H1HorizonMixer(d_h1, vocab=vocab)
+    if config == "H2":
+        # observer before horizon: same param-matching
+        dp = DPMixer(vocab=vocab, d=d)
+        dp_params = count_params(dp)
+        lo, hi = 64, 512
+        while lo < hi:
+            mid = (lo + hi) // 2
+            m = ObserverMixer(mid, vocab=vocab)
+            if count_params(m) < dp_params:
+                lo = mid + 1
+            else:
+                hi = mid
+        d_h2 = max(64, lo)
+        return ObserverMixer(d_h2, vocab=vocab)
     if config == "PM":
         return PropagatingPriorMixer(vocab=vocab, d=d)
     if config == "SP":
@@ -383,6 +425,6 @@ def build_model(config, vocab=VOCAB, d=D):
 
 if __name__ == "__main__":
     # quick sanity: param counts
-    for cfg in ["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "H1", "PM", "SP"]:
+    for cfg in ["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "H1", "H2", "PM", "SP"]:
         m = build_model(cfg, vocab=VOCAB)
         print(f"  {cfg:15s}: {count_params(m):>10,} params")
