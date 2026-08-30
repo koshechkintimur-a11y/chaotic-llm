@@ -311,6 +311,31 @@ class DPFixMixer(nn.Module):
         return self.readout(torch.cat([h[:, -1, :], g], dim=-1))
 
 
+# ================ BLACK-HOLE H1: горизонтный проектор (замена mean) ================
+class H1HorizonMixer(nn.Module):
+    """C-cap + горизонтный проектор вместо mean(dim=1) (ТЗ BLACK-HOLE H1).
+    Микшер тот же (обратим, информация сохраняется), меняем ТОЛЬКО наблюдателя:
+    читаем поверхность (все позиции) выборочно, не усредняем.
+    O(W·D), не O(W²)."""
+    def __init__(self, d_ccap, vocab=VOCAB, blocks=BLOCKS):
+        super().__init__()
+        self.embed = nn.Embedding(vocab, d_ccap)
+        self.pos = nn.Parameter(torch.randn(1, W, d_ccap) * 0.02)
+        self.mixer = BidirectionalMixer(d=d_ccap, seed=0, blocks=blocks)
+        # горизонтный проектор: обучаемый query по всей поверхности
+        self.horizon_q = nn.Parameter(torch.randn(1, 1, d_ccap) * 0.02)
+        self.readout = nn.Sequential(nn.Linear(2 * d_ccap, d_ccap),
+                                     nn.ReLU(), nn.Linear(d_ccap, vocab))
+
+    def forward(self, x):
+        e = self.embed(x) + self.pos
+        h = self.mixer(e)
+        # проектор: softmax-веса по всем позициям (горизонт), O(W·D)
+        w = torch.softmax((h * self.horizon_q).sum(-1, keepdim=True), dim=1)
+        g = (h * w).sum(dim=1)
+        return self.readout(torch.cat([h[:, -1, :], g], dim=-1))
+
+
 def build_model(config, vocab=VOCAB, d=D):
     """Build model by config name, return (model, d_ccap_for_cap)."""
     if config == "DP":
@@ -335,6 +360,20 @@ def build_model(config, vocab=VOCAB, d=D):
                 hi = mid
         d_ccap = max(64, lo)
         return CcapMixer(d_ccap, vocab=vocab)
+    if config == "H1":
+        # same param-matching as C-cap, but horizon-projector readout
+        dp = DPMixer(vocab=vocab, d=d)
+        dp_params = count_params(dp)
+        lo, hi = 64, 512
+        while lo < hi:
+            mid = (lo + hi) // 2
+            m = H1HorizonMixer(mid, vocab=vocab)
+            if count_params(m) < dp_params:
+                lo = mid + 1
+            else:
+                hi = mid
+        d_h1 = max(64, lo)
+        return H1HorizonMixer(d_h1, vocab=vocab)
     if config == "PM":
         return PropagatingPriorMixer(vocab=vocab, d=d)
     if config == "SP":
@@ -344,6 +383,6 @@ def build_model(config, vocab=VOCAB, d=D):
 
 if __name__ == "__main__":
     # quick sanity: param counts
-    for cfg in ["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "PM", "SP"]:
+    for cfg in ["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "H1", "PM", "SP"]:
         m = build_model(cfg, vocab=VOCAB)
         print(f"  {cfg:15s}: {count_params(m):>10,} params")
