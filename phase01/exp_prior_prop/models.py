@@ -234,10 +234,89 @@ def count_params(m):
     return sum(p.numel() for p in m.parameters())
 
 
+# ================ DP-FIX — приор едет зайцем без coupling ================
+class PermuteOnlyMixer(nn.Module):
+    """Prior-вектор проходит ТЕ ЖЕ перестановки, что токены (fwd-траектория),
+    НО без coupling: только перестановка позиций. Идентичность сохраняется.
+    Обратимость проверяется sanity-check в DPFixMixer.__init__."""
+    def __init__(self, source_mixer):
+        super().__init__()
+        self.sig_l = source_mixer.fwd._sig_l      # {t: tensor(Wl)}
+        self.sig_g = source_mixer.fwd._sig_g      # {t: tensor(Nw)}
+        self.Wl = source_mixer.fwd.Wl
+        self.Nw = source_mixer.fwd.Nw
+
+    def _perm_local(self, h):
+        # h: [B, Wl, pd] — shuffle позиций внутри окна
+        for t in range(1, len(self.sig_l) + 1):
+            h = h[:, self.sig_l[t].to(h.device), :]
+        return h
+
+    def _perm_local_inv(self, h):
+        for t in range(len(self.sig_l), 0, -1):
+            inv = torch.argsort(self.sig_l[t].to(h.device))
+            h = h[:, inv, :]
+        return h
+
+    def forward(self, p):
+        # p: [B, W, pd] → локальный shuffle → глобальный shuffle (порядок окон)
+        B, W, pd = p.shape
+        hw = p.view(B, self.Nw, self.Wl, pd)
+        hw = torch.stack([self._perm_local(hw[:, wi]) for wi in range(self.Nw)], dim=1)
+        hw = hw[:, self.sig_g[1].to(hw.device)]          # перестановка окон
+        return hw.reshape(B, W, pd)
+
+    def inverse(self, p):
+        B, W, pd = p.shape
+        hw = p.view(B, self.Nw, self.Wl, pd)
+        inv_g = torch.argsort(self.sig_g[1].to(hw.device))
+        hw = hw[:, inv_g]
+        hw = torch.stack([self._perm_local_inv(hw[:, wi]) for wi in range(self.Nw)], dim=1)
+        return hw.reshape(B, W, pd)
+
+
+class DPFixMixer(nn.Module):
+    """DP-fix: prior едет по перестановкам mixer_x БЕЗ coupling (ТЗ DP-FIX).
+    Readout как у DP; параметры ≈ DP (prior-путь = permute-only + посимвольный
+    Linear, чтобы компенсировать убранный mixer_p и сохранить ёмкость ~287.6K)."""
+    def __init__(self, vocab=VOCAB, d=D, prior_dim=PRIOR_DIM, blocks=BLOCKS):
+        super().__init__()
+        self.embed = nn.Embedding(vocab, d)
+        self.prior_embed = nn.Embedding(vocab, prior_dim)
+        self.pos = nn.Parameter(torch.randn(1, W, d) * 0.02)
+        self.mixer_x = BidirectionalMixer(d=d, seed=0, blocks=blocks)
+        # permute-only по fwd-траектории токенов (без coupling)
+        self.prior_perm = PermuteOnlyMixer(self.mixer_x)
+        # посимвольный Linear (НЕ смешивает позиции — сохраняет идентичность)
+        self.prior_proj = nn.Sequential(nn.Linear(prior_dim, prior_dim),
+                                        nn.ReLU(), nn.Linear(prior_dim, prior_dim))
+        self.readout = nn.Sequential(nn.Linear(2 * (d + prior_dim), d),
+                                     nn.ReLU(), nn.Linear(d, vocab))
+        # П1: sanity check — обратимость переноса (ТЗ §1)
+        with torch.no_grad():
+            p0 = torch.randn(1, W, prior_dim)
+            p1 = self.prior_perm(p0)
+            p2 = self.prior_perm.inverse(p1)
+            assert torch.allclose(p2, p0), \
+                f"DPFix sanity FAILED: max diff {(p2-p0).abs().max().item():.2e}"
+        print("[DPFix] sanity OK: permute-only reversible", flush=True)
+
+    def forward(self, x):
+        e = self.embed(x) + self.pos          # [B,W,d]
+        p = self.prior_embed(x)               # [B,W,prior_dim]
+        x_m = self.mixer_x(e)                 # токены: permute + coupling
+        p_c = self.prior_proj(self.prior_perm(p))   # prior: ТОЛЬКО permute
+        h = torch.cat([x_m, p_c], dim=-1)
+        g = h.mean(dim=1)
+        return self.readout(torch.cat([h[:, -1, :], g], dim=-1))
+
+
 def build_model(config, vocab=VOCAB, d=D):
     """Build model by config name, return (model, d_ccap_for_cap)."""
     if config == "DP":
         return DPMixer(vocab=vocab, d=d)
+    if config == "DP-fix":
+        return DPFixMixer(vocab=vocab, d=d)
     if config == "DP-noprop":
         return DPNoPropMixer(vocab=vocab, d=d)
     if config == "DP-rand":
@@ -265,6 +344,6 @@ def build_model(config, vocab=VOCAB, d=D):
 
 if __name__ == "__main__":
     # quick sanity: param counts
-    for cfg in ["DP", "DP-noprop", "DP-rand", "C-cap", "PM", "SP"]:
+    for cfg in ["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "PM", "SP"]:
         m = build_model(cfg, vocab=VOCAB)
         print(f"  {cfg:15s}: {count_params(m):>10,} params")

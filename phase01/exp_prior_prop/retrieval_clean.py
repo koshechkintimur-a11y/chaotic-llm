@@ -23,7 +23,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("config", choices=["DP", "DP-noprop", "DP-rand", "C-cap", "PM", "SP"])
+    ap.add_argument("config", choices=["DP", "DP-fix", "DP-noprop", "DP-rand", "C-cap", "PM", "SP"])
     ap.add_argument("--noise", type=float, default=0.0)
     ap.add_argument("--n-trials", type=int, default=300)
     args = ap.parse_args()
