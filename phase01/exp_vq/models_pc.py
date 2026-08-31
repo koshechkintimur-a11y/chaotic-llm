@@ -159,9 +159,9 @@ class PurePCLM(nn.Module):
 
 
 def build_pc_model(config, vocab=512, d=128, alpha=0.9, k_init=1.2,
-                   sync_steps=1, driver_mode="mean", temp=0.3):
+                   sync_steps=1, driver_mode="mean", temp=0.3, layers=4):
     if config == "pc":
-        return PurePCLM(vocab=vocab, d=d, layers=4, k_init=k_init,
+        return PurePCLM(vocab=vocab, d=d, layers=layers, k_init=k_init,
                         sync_steps=sync_steps, driver_mode=driver_mode, temp=temp)
     raise ValueError(f"unknown {config}")
 

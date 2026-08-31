@@ -62,7 +62,13 @@ def gated_ppl(logits, targets, prior, V, ctx_tokens=None):
 
 
 def induction_retrieval(model, test_ids, distances=(16, 64, 128, 256), n_trials=200):
-    """Честный индукционный тест + сбор распределения выбранных позиций драйвера."""
+    """Правильный индукционный тест: A→B паттерн, второй A последним токеном окна.
+
+    Находим реальный bigram (A, B) на позициях (i, i+1), затем позицию j>i+1,
+    где test_ids[j-1]==A (второй A — последний токен окна). Модель видит
+    [..., A] и должна предсказать следующий токен == B. Расстояние L = j-i.
+    Это корректная индукционная задача, где правильный ответ действительно B.
+    """
     model.eval()
     rng = np.random.default_rng(0)
     res = {}
@@ -71,12 +77,19 @@ def induction_retrieval(model, test_ids, distances=(16, 64, 128, 256), n_trials=
         hits, miss = 0, 0
         pos_L = []
         for _ in range(n_trials):
-            i = int(rng.integers(L + 2, len(test_ids) - L - 3))
-            A = int(test_ids[i])
-            B = int(test_ids[i + 1])
-            # второй KEY на дистанции L
-            j = i + L
-            window = test_ids[j - W:j]
+            # ищем реальный паттерн A→B и второй A на расстоянии L
+            found = False
+            for _try in range(200):
+                i = int(rng.integers(L + 2, len(test_ids) - L - 2))
+                A = int(test_ids[i])
+                B = int(test_ids[i + 1])
+                j = i + L
+                if j < len(test_ids) and test_ids[j - 1] == A:
+                    found = True
+                    break
+            if not found:
+                continue
+            window = test_ids[j - W:j]   # последний токен = A (второй)
             X = torch.tensor([window], dtype=torch.long, device="cuda")
             with torch.no_grad():
                 out = model(X)
@@ -97,8 +110,8 @@ def induction_retrieval(model, test_ids, distances=(16, 64, 128, 256), n_trials=
     return res, drv_stats
 
 
-def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode="mean", temp=0.3):
-    print(f"\n=== Training {config} (alpha={alpha}, k={k_init}, T={sync_steps}, drv={driver_mode}, temp={temp}) ===", flush=True)
+def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode="mean", temp=0.3, layers=4, d=128):
+    print(f"\n=== Training {config} (alpha={alpha}, k={k_init}, T={sync_steps}, drv={driver_mode}, temp={temp}, layers={layers}, d={d}) ===", flush=True)
     rng = np.random.default_rng(0)
     train_text = load_chars(os.path.join(PHASE, "corpus_train.txt"), MAX_TRAIN)
     test_text = load_chars(os.path.join(PHASE, "corpus_test.txt"))
@@ -110,7 +123,7 @@ def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode=
 
     model = build_pc_model(config, V, alpha=alpha, k_init=k_init,
                            sync_steps=sync_steps, driver_mode=driver_mode,
-                           temp=temp).to("cuda")
+                           temp=temp, layers=layers, d=d).to("cuda")
     nparam = sum(p.numel() for p in model.parameters())
     print(f"params={nparam:,}", flush=True)
 
@@ -189,6 +202,8 @@ def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode=
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("config", choices=["pc"])
+    ap.add_argument("--layers", type=int, default=4)
+    ap.add_argument("--d", type=int, default=128)
     ap.add_argument("--steps", type=int, default=STEPS)
     ap.add_argument("--alpha", type=float, default=0.9)
     ap.add_argument("--k", type=float, default=1.2)
@@ -197,4 +212,5 @@ if __name__ == "__main__":
     ap.add_argument("--temp", type=float, default=0.3)
     args = ap.parse_args()
     train(args.config, args.steps, alpha=args.alpha, k_init=args.k,
-          sync_steps=args.sync_steps, driver_mode=args.driver, temp=args.temp)
+          sync_steps=args.sync_steps, driver_mode=args.driver, temp=args.temp,
+          layers=args.layers, d=args.d)
