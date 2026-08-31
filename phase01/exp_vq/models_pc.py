@@ -117,26 +117,27 @@ class PurePCLM(nn.Module):
         Bn = e.shape[0]
         # ============ STS-PROG: прогрессивное уточнение селекции ============
         if self.driver_mode == "sts_prog":
-            # multi-query: последние 4 токена (индукция читает контекст, не 1 токен)
-            q = e[:, -self.nquery:, :].mean(dim=1)            # [B, d]
-            qn = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
+            # multi-query: последние nquery токенов
+            q0 = e[:, -self.nquery:, :].mean(dim=1)            # [B, d] raw query
+            q = q0
+            en = e / (e.norm(dim=-1, keepdim=True) + 1e-6)     # keys СЫРЫЕ (идентичность жива)
             h = e
             for li, blk in enumerate(self.blocks):
-                # ПРОГРЕССИВНОЕ уточнение: перевыбираем драйвер на ОБНОВЛЁННОМ состоянии
-                # (после предыдущей синхронизации h несёт контекст → точнее находим KEY)
-                hn = h / (h.norm(dim=-1, keepdim=True) + 1e-6)
-                sim = (hn * qn.unsqueeze(1)).sum(-1)          # [B, W]
+                qn = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
+                sim = (en * qn.unsqueeze(1)).sum(-1)           # селекция на СЫРЫХ ключах
                 sim[:, W - 8:] = -1e9
                 # soft top-k соседей (sel+1)
                 kk = min(self.topk, W - 8)
-                top_w, top_i = torch.topk(sim, kk, dim=1)     # [B, k]
-                w = torch.softmax(top_w / self.temp, dim=1)   # [B, k]
+                top_w, top_i = torch.topk(sim, kk, dim=1)
+                w = torch.softmax(top_w / self.temp, dim=1)
                 top_next = torch.clamp(top_i + 1, 0, W - 2)
                 idx = torch.arange(Bn, device=e.device).unsqueeze(1).expand(Bn, kk)
-                neigh = h[idx, top_next]                       # соседи из тек. состояния
+                neigh = e[idx, top_next]                       # соседи из СЫРЫХ (B жива)
                 driver = (w.unsqueeze(-1) * neigh).sum(dim=1, keepdim=True)
                 self.last_driver_pos = top_next[:, 0]
-                h = blk(h, driver)                             # PC-синхронизация
+                h = blk(h, driver)                             # PC-синхронизация (смысл)
+                # уточняем query контекстом из синхронизированного состояния
+                q = q0 + self.query_proj(h[:, -1, :]) * 0.5
             self._last_sim = sim  # для aux loss
             h_last = h[:, -1, :]
             g = h.mean(dim=1)
