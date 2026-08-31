@@ -87,8 +87,8 @@ def induction_retrieval(model, test_ids, distances=(16, 64, 128, 256), n_trials=
     return res
 
 
-def train(config, steps=STEPS):
-    print(f"\n=== Training {config} ===", flush=True)
+def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode="mean"):
+    print(f"\n=== Training {config} (alpha={alpha}, k={k_init}, T={sync_steps}, drv={driver_mode}) ===", flush=True)
     rng = np.random.default_rng(0)
     train_text = load_chars(os.path.join(PHASE, "corpus_train.txt"), MAX_TRAIN)
     test_text = load_chars(os.path.join(PHASE, "corpus_test.txt"))
@@ -98,7 +98,8 @@ def train(config, steps=STEPS):
     test_ids = tok.encode(test_text).ids
     print(f"V={V} train={len(train_ids):,} test={len(test_ids):,}", flush=True)
 
-    model = build_pc_model(config, V).to("cuda")
+    model = build_pc_model(config, V, alpha=alpha, k_init=k_init,
+                           sync_steps=sync_steps, driver_mode=driver_mode).to("cuda")
     nparam = sum(p.numel() for p in model.parameters())
     print(f"params={nparam:,}", flush=True)
 
@@ -172,5 +173,10 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("config", choices=["pc"])
     ap.add_argument("--steps", type=int, default=STEPS)
+    ap.add_argument("--alpha", type=float, default=0.9)
+    ap.add_argument("--k", type=float, default=1.2)
+    ap.add_argument("--sync-steps", type=int, default=1)
+    ap.add_argument("--driver", choices=["mean", "crt"], default="mean")
     args = ap.parse_args()
-    train(args.config, args.steps)
+    train(args.config, args.steps, alpha=args.alpha, k_init=args.k,
+          sync_steps=args.sync_steps, driver_mode=args.driver)

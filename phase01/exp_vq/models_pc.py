@@ -1,15 +1,12 @@
-"""models_pc.py — PC-микшер: диссипативная Пекоры–Кэрролл динамика вместо
-симметричного coupling. Построен на пробах pc_probe3 (sync_err=0 при k=1.2).
+"""models_pc.py — ЧИСТЫЙ PC-микшер (Пекоры–Кэрролл, полностью без Арнольда).
 
-Ключевое отличие от exp52: coupling ОДНОНАПРАВЛЕННЫЙ + СЖИМАЮЩИЙ (α<1) —
-создаёт устойчивое многообразие, к которому состояние синхронизируется.
-Симметричный coupling (exp52) консервативен -> синхронизация невозможна.
+Архитектор: «убираем Арнольда из уравнения, ставим синхронизацию Пекоры–Кэрролла».
+НЕТ permute_indices, НЕТ even/odd coupling, НЕТ Arnold-перестановок.
 
-Архитектура:
-  embed + pos
-  -> L блоков: Arnold-permute + диссипативный coupling + tanh
-  -> PC-синхронизация readout к глобальному драйверу (mean)
-  -> readout
+Вся динамика:
+  1. Хаотическая диссипативная карта: h = h + tanh(h @ W + b) (спектр.радиус W > 1)
+  2. PC-синхронизация: h = h + k * (driver - h) (однонаправленная связь к драйверу)
+  Смешивание по ПОЗИЦИЯМ — только через выбор драйвера (КТО-адрес или mean).
 """
 import math
 import torch
@@ -17,83 +14,77 @@ import torch.nn as nn
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
-try:
-    from chaos_lib import permute_indices
-except ImportError:
-    def permute_indices(N, seed):
-        rng = np.random.default_rng(seed)
-        return rng.permutation(N)
-
-W = 256
-
+W = 256  # window size
 
 def count_params(m):
     return sum(p.numel() for p in m.parameters())
 
 
-class PCDissipativeBlock(nn.Module):
-    """Один блок: перестановка + однонаправленный сжимающий coupling + tanh.
-
-    Схема coupling (Пекоры-Кэрролл, однонаправленная):
-      even' = even + g * odd          # чётные тянутся к нечётным
-      odd'  = α * odd + g * even'     # нечётные сжаты (α<1) и тянутся к even'
-    α<1 -> диссипация -> устойчивое многообразие -> синхронизация.
-    """
-    def __init__(self, d, seed=0, alpha=0.9):
+class PurePCBlock(nn.Module):
+    """Чистый PC-блок: НЕТ Arnold, НЕТ even/odd coupling.
+    Хаотическая динамика (residual + tanh) + PC-синхронизация к драйверу."""
+    def __init__(self, d, k=1.2):
         super().__init__()
-        self.d = d
-        self.alpha = alpha
-        self.sig = torch.tensor(permute_indices(W, seed), dtype=torch.long)
-        self.inv = torch.argsort(self.sig)
-        self.gate = nn.Parameter(torch.full((1,), 0.3))
-        self.gate2 = nn.Parameter(torch.full((1,), 0.3))
+        # матрица со спектральным радиусом >1 (хаос) + tanh сжимает (диссипация)
+        self.W = nn.Parameter(torch.eye(d) * 1.5 + torch.randn(d, d) * 0.05)
+        self.b = nn.Parameter(torch.zeros(d))
+        self.k = k
 
-    def forward(self, h):
-        B = h.shape[0]
-        # перестановка позиций (адреса)
-        h = h[:, self.sig]
-        # однонаправленный coupling по чёт/нечет
-        e = h[:, 0::2]      # чётные
-        o = h[:, 1::2]      # нечётные
-        g = torch.sigmoid(self.gate) * 0.9 + 0.05
-        g2 = torch.sigmoid(self.gate2) * 0.9 + 0.05
-        e2 = e + g * o
-        o2 = self.alpha * o + g2 * e2
-        # собрать интерливом
-        Wp = e2.shape[1]
-        h2 = torch.stack([e2, o2], dim=2).reshape(B, 2 * Wp, self.d)
-        if h2.shape[1] > h.shape[1]:
-            h2 = h2[:, :h.shape[1]]
-        elif h2.shape[1] < h.shape[1]:
-            h2 = torch.cat([h2, h[:, h2.shape[1]:]], dim=1)
-        # обратная перестановка
-        h2 = h2[:, self.inv]
-        return torch.tanh(h2)
+    def forward(self, h, driver):
+        # хаотическая динамика: растяжение (W) + нелинейность (tanh) = диссипативный хаос
+        h = h + torch.tanh(h @ self.W + self.b) * 0.3
+        # PC-синхронизация к драйверу (однонаправленная)
+        h = h + self.k * (driver - h)
+        return h
 
 
-class PCLM(nn.Module):
-    """PC-микшер LM: диссипативная динамика + синхронизация readout к драйверу."""
-    def __init__(self, vocab=VOCAB if 'VOCAB' in dir() else 512, d=128, layers=4, alpha=0.9):
+class PurePCLM(nn.Module):
+    """Чистый PC-микшер LM: без Арнольда, только хаотическая динамика + PC-синхронизация.
+    driver_mode: 'mean' | 'crt' (КТО-селекция по позиции запроса)
+    """
+    def __init__(self, vocab=512, d=128, layers=4, k_init=1.2,
+                 sync_steps=1, driver_mode="mean", primes=(3, 5, 7, 11)):
         super().__init__()
         self.d = d
         self.layers = layers
+        self.sync_steps = sync_steps
+        self.driver_mode = driver_mode
+        self.primes = list(primes)
         self.embed = nn.Embedding(vocab, d)
         self.pos = nn.Parameter(torch.randn(1, W, d) * 0.02)
-        self.blocks = nn.ModuleList(
-            [PCDissipativeBlock(d, seed=i, alpha=alpha) for i in range(layers)])
-        # PC-синхронизация readout к драйверу: k обучаемый (старт 1.2 из пробы)
-        self.k = nn.Parameter(torch.tensor([1.2]))
+        self.blocks = nn.ModuleList([PurePCBlock(d, k=k_init) for _ in range(layers)])
+        self.k = nn.Parameter(torch.tensor([k_init]))
+        if driver_mode == "crt":
+            self.crt_proj = nn.ModuleList([nn.Linear(d, d) for _ in primes])
         self.readout = nn.Sequential(
             nn.Linear(2 * d, d), nn.ReLU(), nn.Linear(d, vocab))
 
+    def _select_driver(self, h):
+        """Выбор драйвера для readout-позиции (W-1)."""
+        if self.driver_mode == "mean":
+            return h.mean(dim=1, keepdim=True)  # [B,1,d]
+        elif self.driver_mode == "crt":
+            i = W - 1
+            buckets = []
+            for pi, p in enumerate(self.primes):
+                mask = (torch.arange(W, device=h.device) % p) == (i % p)
+                sel = h[:, mask]
+                b = self.crt_proj[pi](sel).sum(dim=1, keepdim=True)
+                buckets.append(b)
+            return torch.cat(buckets, dim=1).mean(dim=1, keepdim=True)
+
     def forward(self, x, return_aux=False):
         h = self.embed(x) + self.pos
+        # стек блоков чистой PC-синхронизации
+        driver_seq = self._select_driver(h)  # общий драйвер на всю последовательность блоков
         for blk in self.blocks:
-            h = blk(h)
-        # драйвер = глобальный контекст (mean по позициям)
-        driver = h.mean(dim=1, keepdim=True)          # [B,1,d]
+            h = blk(h, driver_seq)
+        # финальная PC-синхронизация readout c T шагами
+        driver = self._select_driver(h)
         k = torch.clamp(self.k, 0.0, 2.0)
-        h_sync = h + k * (driver - h)                  # PC-связь, B шагов=1
+        h_sync = h[:, -1:, :]
+        for _ in range(self.sync_steps):
+            h_sync = h_sync + k * (driver - h_sync)
         h_last = h_sync[:, -1, :]
         g = h.mean(dim=1)
         logits = self.readout(torch.cat([h_last, g], dim=-1))
@@ -102,9 +93,11 @@ class PCLM(nn.Module):
         return logits
 
 
-def build_pc_model(config, vocab=512, d=128):
+def build_pc_model(config, vocab=512, d=128, alpha=0.9, k_init=1.2,
+                   sync_steps=1, driver_mode="mean"):
     if config == "pc":
-        return PCLM(vocab=vocab, d=d, layers=4)
+        return PurePCLM(vocab=vocab, d=d, layers=4, k_init=k_init,
+                        sync_steps=sync_steps, driver_mode=driver_mode)
     raise ValueError(f"unknown {config}")
 
 
