@@ -2,6 +2,20 @@
 
 **Ветка:** `pc-carroll` | **Дата:** 2026-08-31 | **Статус:** ✅ ревью закрыто, прорыв подтверждён
 
+> **Название архитектуры — STS-Prog, НЕ ChaoticLLM.**
+> ```
+> Исходный вопрос: Can reversible chaotic dynamics (Arnold) replace attention?
+> Ответ: НЕТ (70+ экспериментов)
+>
+> Новый вопрос: Can dissipative chaos + sparse attention beat transformer?
+> Ответ: ДА (STS-Prog побеждает на всех метриках)
+>
+> Архитектура: STS-Prog (не ChaoticLLM)
+> - Sparse attention на сырых эмбеддингах (content-addressable retrieval)
+> - Dissipative chaotic dynamics (PC-синхронизация)
+> - Progressive query refinement + multi-input readout
+> ```
+
 ## Что это
 
 **Не «хаос как вычислитель».** Это **гибрид**:
