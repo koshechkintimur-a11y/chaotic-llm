@@ -156,7 +156,17 @@ def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode=
             pos_sum = pos_mask.sum(dim=1, keepdim=True)              # [B, 1]
             valid = (pos_sum > 0).squeeze(1)                         # [B]
             if valid.any():
-                target = pos_mask / pos_sum.clamp(min=1e-6)          # [B, W]
+                # цель: БЛИЖАЙШЕЕ повторение к query (W-9), Гауссово ядро sigma=2
+                # дистанция от каждой позиции до query-окрестности
+                pos_idx = torch.arange(W, device=X.device).float().unsqueeze(0)  # [1, W]
+                # запрещаем не-повторения: огромная дистанция
+                dist = (pos_idx - (W - 9)).abs()                     # [1, W]
+                dist = dist + (1.0 - pos_mask) * 1e4                 # [B, W]
+                nearest = dist.argmin(dim=1)                          # [B]
+                sigma = 2.0
+                target = torch.exp(-(pos_idx - nearest.unsqueeze(1)).pow(2) / (2 * sigma ** 2))  # [B, W]
+                target = target * pos_mask                            # только повторения
+                target = target / target.sum(dim=1, keepdim=True).clamp(min=1e-6)  # [B, W]
                 target[~valid] = 0.0
                 log_sm = torch.log_softmax(sim, dim=1)               # [B, W]
                 aux_loss = -(target * log_sm).sum(dim=1)             # [B]

@@ -1,1 +1,1 @@
-{"config": "pc", "params": 690753, "mixer_ppl": 27.115, "gated_ppl": 8.72, "retrieval": {"16": 0.4264, "64": 0.2872, "128": 0.2941, "256": 0.5699}, "drv_mean_pos": 120.58, "drv_tail_frac": 0.206}
+{"config": "pc", "params": 690753, "mixer_ppl": 25.227, "gated_ppl": 8.561, "retrieval": {"16": 0.4112, "64": 0.4362, "128": 0.2513, "256": 0.2634}, "drv_mean_pos": 204.83, "drv_tail_frac": 0.532}
