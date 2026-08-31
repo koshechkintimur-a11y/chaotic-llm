@@ -61,11 +61,16 @@ class PurePCLM(nn.Module):
         self.last_driver_pos = None  # для анализа распределения выбранных позиций
 
     def _address_weights(self, h):
-        """Query=последняя позиция, keys=все позиции, cosine. Возвращает веса [B, W]."""
+        """Query=последняя позиция, keys=все позиции, cosine.
+        Маскируем позицию запроса и ближайшие 8 (самовыбор = тривиальный максимум,
+        не даёт найти ДРУГОЙ драйвер)."""
+        B = h.shape[0]
         q = h[:, -1, :]                                   # [B, d]
         qn = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
         hn = h / (h.norm(dim=-1, keepdim=True) + 1e-6)    # [B, W, d]
         sim = (hn * qn.unsqueeze(1)).sum(-1)              # [B, W] cosine
+        # маскируем последние 8 позиций (включая саму query) — запрещаем самовыбор
+        sim[:, W - 8:] = -1e9
         return sim
 
     def _select_driver(self, h):
