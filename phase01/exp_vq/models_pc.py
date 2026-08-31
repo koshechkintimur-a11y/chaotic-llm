@@ -28,20 +28,20 @@ def count_params(m):
 
 class PurePCBlock(nn.Module):
     """Чистый PC-блок: НЕТ Arnold. Хаотическая карта + PC-синхронизация к драйверу."""
-    def __init__(self, d, k=1.2):
+    def __init__(self, d, alpha=0.3):
         super().__init__()
         self.W = nn.Parameter(torch.eye(d) * 1.5 + torch.randn(d, d) * 0.05)
         self.b = nn.Parameter(torch.zeros(d))
-        self.k = k
+        self.alpha = alpha   # сила хаотической динамики (используется!)
 
-    def forward(self, h, driver):
-        h = h + torch.tanh(h @ self.W + self.b) * 0.3   # диссипативный хаос
-        h = h + self.k * (driver - h)                    # PC-синхронизация
+    def forward(self, h, driver, k):
+        h = h + self.alpha * torch.tanh(h @ self.W + self.b)   # диссипативный хаос
+        h = (1 - k) * h + k * driver                           # PC-синхронизация (k∈[0,1])
         return h
 
 
 class PurePCLM(nn.Module):
-    def __init__(self, vocab=512, d=128, layers=4, k_init=1.2,
+    def __init__(self, vocab=512, d=128, layers=4, k_init=1.2, alpha=0.3,
                  sync_steps=1, driver_mode="mean", temp=0.3, primes=(3, 5, 7, 11)):
         super().__init__()
         self.d = d
@@ -49,11 +49,12 @@ class PurePCLM(nn.Module):
         self.sync_steps = sync_steps
         self.driver_mode = driver_mode
         self.temp = temp
+        self.alpha = alpha
         self.primes = list(primes)
         self.embed = nn.Embedding(vocab, d)
         self.pos = nn.Parameter(torch.randn(1, W, d) * 0.02)
-        self.blocks = nn.ModuleList([PurePCBlock(d, k=k_init) for _ in range(layers)])
-        self.k = nn.Parameter(torch.tensor([k_init]))
+        self.blocks = nn.ModuleList([PurePCBlock(d, alpha=alpha) for _ in range(layers)])
+        self.k = nn.Parameter(torch.tensor([k_init]))  # обучаемый, sigmoid → [0,1]
         if driver_mode == "crt":
             self.crt_proj = nn.ModuleList([nn.Linear(d, d) for _ in primes])
         self.readout = nn.Sequential(
@@ -117,6 +118,7 @@ class PurePCLM(nn.Module):
     def forward(self, x, return_aux=False):
         e = self.embed(x) + self.pos          # сырые эмбеддинги — идентичность жива
         Bn = e.shape[0]
+        k_eff = torch.sigmoid(self.k)         # обучаемый, всегда в [0,1] — стягивание
         # ============ STS-MQ: multi-query single-shot ============
         if self.driver_mode == "sts_mq":
             q = e[:, -self.nquery:, :].mean(dim=1)            # [B, d] query из 4 токенов
@@ -135,7 +137,7 @@ class PurePCLM(nn.Module):
             self._last_sim = sim
             h = e
             for blk in self.blocks:
-                h = blk(h, h.mean(dim=1, keepdim=True))       # хаотическая динамика (смысл)
+                h = blk(h, h.mean(dim=1, keepdim=True), k_eff)   # хаотическая динамика
             driver = self._sts_driver
             k = torch.clamp(self.k, 0.0, 2.0)
             h_sync = h[:, -1:, :]
@@ -166,7 +168,7 @@ class PurePCLM(nn.Module):
                 if self.driver_mode == "sts_prog_nopc":
                     h = h + driver * 0.0                       # абляция: без хаоса (identity)
                 else:
-                    h = blk(h, driver)                         # PC-синхронизация (смысл)
+                    h = blk(h, driver, k_eff)                         # PC-синхронизация
                 q = q0 + self.query_proj(h[:, -1, :]) * 0.5
             self._last_sim = sim  # для aux loss
             h_last = h[:, -1, :]
@@ -203,7 +205,7 @@ class PurePCLM(nn.Module):
             # хаотическая динамика (смысл)
             h = e
             for blk in self.blocks:
-                h = blk(h, h.mean(dim=1, keepdim=True))
+                h = blk(h, h.mean(dim=1, keepdim=True), k_eff)
             if self.driver_mode in ("sts_emb", "sts_h"):
                 if self.driver_mode == "sts_emb":
                     self._sts_driver = e[torch.arange(Bn, device=e.device), sel_next][:, None, :]
@@ -225,7 +227,7 @@ class PurePCLM(nn.Module):
         h = e
         for blk in self.blocks:
             driver = self._select_driver(h)
-            h = blk(h, driver)
+            h = blk(h, driver, k_eff)
         driver = self._select_driver(h)
         k = torch.clamp(self.k, 0.0, 2.0)
         h_sync = h[:, -1:, :]
@@ -239,10 +241,10 @@ class PurePCLM(nn.Module):
         return logits
 
 
-def build_pc_model(config, vocab=512, d=128, alpha=0.9, k_init=1.2,
+def build_pc_model(config, vocab=512, d=128, alpha=0.3, k_init=1.2,
                    sync_steps=1, driver_mode="mean", temp=0.3, layers=4):
     if config == "pc":
-        return PurePCLM(vocab=vocab, d=d, layers=layers, k_init=k_init,
+        return PurePCLM(vocab=vocab, d=d, layers=layers, k_init=k_init, alpha=alpha,
                         sync_steps=sync_steps, driver_mode=driver_mode, temp=temp)
     raise ValueError(f"unknown {config}")
 

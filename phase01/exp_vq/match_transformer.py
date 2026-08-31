@@ -18,8 +18,11 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 PHASE = os.path.join(HERE, "..")
 W = 256
+LR = 5e-4
+WARMUP = 1000
 BATCH = 64
 STEPS = 6000
+N_EVAL = 5000
 VOCAB = 512
 MAX_TRAIN = 990_000
 MAX_TEST = 2_400_000
@@ -146,24 +149,31 @@ def induction_retrieval(model, test_ids, distances=(16, 64, 128, 256), n_trials=
 
 
 def main():
-    torch.manual_seed(0)
-    np.random.seed(0)
+    train_transformer(budget=900_000, layers=8, heads=4)
+
+
+def train_transformer(budget=900_000, layers=8, heads=4):
+    """Матч трансформера, ПРОТОКОЛ ВЫРОВНЕН под sts_prog:
+    LR 5e-4 + warmup 1000 + grad clip 1.0 + N_EVAL 5000 + та же глубина (8 слоёв)."""
     tok, V, train_ids, test_ids = build_data()
-    print(f"V={V} train={len(train_ids)} test={len(test_ids)}")
-
-    budget = 900_000
-    D = pick_tf_dims(budget, V, W, layers=4, heads=4)
-    model = TransformerLM(V, W, D=D, HEADS=4, LAYERS=4).to("cuda")
-    nparam = count_params(model)
-    print(f"Transformer: D={D} L=4 H=4 params={nparam:,}")
-
-    opt = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.01)
-    lossf = nn.CrossEntropyLoss()
     n = len(train_ids) - W - 1
+    D = pick_tf_dims(budget, V, W, layers=layers, heads=heads)
+    model = TransformerLM(V, W, D=D, HEADS=heads, LAYERS=layers).to("cuda")
+    nparam = count_params(model)
+    print(f"Transformer: D={D} L={layers} H={heads} params={nparam:,}")
+
+    opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.01)
+    lossf = nn.CrossEntropyLoss()
     rng = np.random.default_rng(1)
-    steps = STEPS
     t0 = time.time()
-    for step in range(1, steps + 1):
+    for step in range(1, STEPS + 1):
+        # warmup как в experiment_pc
+        if step < WARMUP:
+            for pg in opt.param_groups:
+                pg["lr"] = LR * step / WARMUP
+        else:
+            for pg in opt.param_groups:
+                pg["lr"] = LR
         s = rng.integers(0, n, size=BATCH)
         X = np.stack([train_ids[i:i + W] for i in s])
         Y = np.array([train_ids[i + W] for i in s])
@@ -173,15 +183,15 @@ def main():
         logits = model(Xt)
         loss = lossf(logits, Yt)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
         if step % 2000 == 0:
-            print(f"  [{step}/{steps}] loss={loss.item():.3f} ({time.time()-t0:.0f}s)", flush=True)
+            print(f"  [{step}/{STEPS}] loss={loss.item():.3f} ({time.time()-t0:.0f}s)", flush=True)
     dt = time.time() - t0
 
-    # eval
+    # eval: N_EVAL = 5000 (как в experiment_pc)
     model.eval()
     rng2 = np.random.default_rng(42)
-    N_EVAL = 4000
     te_starts = np.sort(rng2.choice(len(test_ids) - W - 1, size=N_EVAL, replace=False))
     logits_te = np.zeros((N_EVAL, V), dtype=np.float32)
     y_te = np.zeros(N_EVAL, dtype=np.int64)
@@ -198,8 +208,9 @@ def main():
     gated = gated_ppl(lpm, y_te, prior, ctx_tokens)
     retrieval = induction_retrieval(model, test_ids)
     print(f"[tf] mixer={mixer_ppl:.3f} gated={gated:.3f} retrieval={retrieval} params={nparam:,} time={dt:.0f}s", flush=True)
-    res = {"kind": "transformer", "D": D, "L": 4, "params": nparam, "mixer_ppl": round(mixer_ppl, 3),
-           "gated_ppl": round(gated, 3), "retrieval": {str(k): round(v, 3) for k, v in retrieval.items()},
+    res = {"kind": "transformer", "D": D, "L": layers, "H": heads, "params": nparam,
+           "mixer_ppl": round(mixer_ppl, 3), "gated_ppl": round(gated, 3),
+           "retrieval": {str(k): round(v, 3) for k, v in retrieval.items()},
            "time_s": round(dt, 1)}
     with open(os.path.join(HERE, "results_transformer.json"), "w") as f:
         json.dump(res, f, indent=2)
