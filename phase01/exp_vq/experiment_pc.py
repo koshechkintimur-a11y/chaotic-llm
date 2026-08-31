@@ -156,8 +156,6 @@ def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode=
             pos_sum = pos_mask.sum(dim=1, keepdim=True)              # [B, 1]
             valid = (pos_sum > 0).squeeze(1)                         # [B]
             if valid.any():
-                # цель: БЛИЖАЙШЕЕ повторение (Гаусс, локальная точность)
-                #     + РАВНОМЕРНАЯ (глобальное покрытие) — комбинированная
                 pos_idx = torch.arange(W, device=X.device).float().unsqueeze(0)  # [1, W]
                 dist = (pos_idx - (W - 9)).abs()                     # [1, W]
                 dist = dist + (1.0 - pos_mask) * 1e4                 # [B, W]
@@ -166,12 +164,35 @@ def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode=
                 gauss = torch.exp(-(pos_idx - nearest.unsqueeze(1)).pow(2) / (2 * sigma ** 2))  # [B, W]
                 gauss = gauss * pos_mask
                 uniform = pos_mask / pos_sum.clamp(min=1e-6)         # [B, W]
-                target = 0.7 * gauss + 0.3 * uniform                 # комбо
-                target = target / target.sum(dim=1, keepdim=True).clamp(min=1e-6)
-                target[~valid] = 0.0
+                mode = args.aux_mode
                 log_sm = torch.log_softmax(sim, dim=1)               # [B, W]
-                aux_loss = -(target * log_sm).sum(dim=1)             # [B]
-                aux_loss = aux_loss[valid].mean()                    # скаляр
+                if mode == "curriculum":
+                    # ближайшее (4K шагов) -> равномерная (2K) — смена цели
+                    if step < 4000:
+                        tgt = gauss / gauss.sum(dim=1, keepdim=True).clamp(min=1e-6)
+                    else:
+                        tgt = uniform
+                elif mode == "multibead":
+                    # две головы: локальная (gauss) + глобальная (uniform)
+                    g = gauss / gauss.sum(dim=1, keepdim=True).clamp(min=1e-6)
+                    aux_local = -(g * log_sm).sum(dim=1)[valid].mean()
+                    aux_global = -(uniform * log_sm).sum(dim=1)[valid].mean()
+                    aux_loss = 0.5 * aux_local + 0.5 * aux_global
+                    tgt = None
+                elif mode == "combo":
+                    tgt = 0.5 * gauss + 0.5 * uniform
+                    tgt = tgt / tgt.sum(dim=1, keepdim=True).clamp(min=1e-6)
+                elif mode == "nearest":
+                    tgt = gauss / gauss.sum(dim=1, keepdim=True).clamp(min=1e-6)
+                elif mode == "uniform":
+                    tgt = uniform
+                else:
+                    raise ValueError(f"unknown aux_mode {mode}")
+                if tgt is not None:
+                    tgt = tgt * pos_mask
+                    tgt = tgt / tgt.sum(dim=1, keepdim=True).clamp(min=1e-6)
+                    tgt[~valid] = 0.0
+                    aux_loss = -(tgt * log_sm).sum(dim=1)[valid].mean()
         loss = main_loss + args.aux_w * aux_loss
 
         opt.zero_grad()
@@ -236,9 +257,10 @@ if __name__ == "__main__":
     ap.add_argument("--alpha", type=float, default=0.9)
     ap.add_argument("--k", type=float, default=1.2)
     ap.add_argument("--sync-steps", type=int, default=1)
-    ap.add_argument("--driver", choices=["mean", "last", "top1", "soft", "crt", "sts_emb", "sts_h", "sts_lq", "sts_lqk"], default="mean")
+    ap.add_argument("--driver", choices=["mean", "last", "top1", "soft", "crt", "sts_emb", "sts_h", "sts_lq", "sts_lqk", "sts_prog"], default="mean")
     ap.add_argument("--temp", type=float, default=0.3)
     ap.add_argument("--aux-w", type=float, default=0.0, dest="aux_w")
+    ap.add_argument("--aux-mode", choices=["uniform", "nearest", "combo", "curriculum", "multibead"], default="nearest")
     args = ap.parse_args()
     train(args.config, args.steps, alpha=args.alpha, k_init=args.k,
           sync_steps=args.sync_steps, driver_mode=args.driver, temp=args.temp,

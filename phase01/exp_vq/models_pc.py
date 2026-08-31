@@ -62,6 +62,7 @@ class PurePCLM(nn.Module):
         self.query_proj = nn.Sequential(
             nn.Linear(d, d), nn.ReLU(), nn.Linear(d, d))
         self.topk = 8
+        self.nquery = 4  # последние N токенов как multi-query для sts_prog
         self._last_sim = None  # для auxiliary loss (локализация повтора)
 
     def _address_weights(self, h):
@@ -113,7 +114,35 @@ class PurePCLM(nn.Module):
 
     def forward(self, x, return_aux=False):
         e = self.embed(x) + self.pos          # сырые эмбеддинги — идентичность жива
-        # SELECT-THEN-SYNC: селекция на сырых, драйвер = сосед (sel+1)
+        Bn = e.shape[0]
+        # ============ STS-PROG: прогрессивное уточнение селекции ============
+        if self.driver_mode == "sts_prog":
+            # multi-query: последние 4 токена (индукция читает контекст, не 1 токен)
+            q = e[:, -self.nquery:, :].mean(dim=1)            # [B, d]
+            qn = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
+            h = e
+            for li, blk in enumerate(self.blocks):
+                # ПРОГРЕССИВНОЕ уточнение: перевыбираем драйвер на ОБНОВЛЁННОМ состоянии
+                # (после предыдущей синхронизации h несёт контекст → точнее находим KEY)
+                hn = h / (h.norm(dim=-1, keepdim=True) + 1e-6)
+                sim = (hn * qn.unsqueeze(1)).sum(-1)          # [B, W]
+                sim[:, W - 8:] = -1e9
+                # soft top-k соседей (sel+1)
+                kk = min(self.topk, W - 8)
+                top_w, top_i = torch.topk(sim, kk, dim=1)     # [B, k]
+                w = torch.softmax(top_w / self.temp, dim=1)   # [B, k]
+                top_next = torch.clamp(top_i + 1, 0, W - 2)
+                idx = torch.arange(Bn, device=e.device).unsqueeze(1).expand(Bn, kk)
+                neigh = h[idx, top_next]                       # соседи из тек. состояния
+                driver = (w.unsqueeze(-1) * neigh).sum(dim=1, keepdim=True)
+                self.last_driver_pos = top_next[:, 0]
+                h = blk(h, driver)                             # PC-синхронизация
+            self._last_sim = sim  # для aux loss
+            h_last = h[:, -1, :]
+            g = h.mean(dim=1)
+            logits = self.readout(torch.cat([h_last, g], dim=-1))
+            return logits
+        # ============ SELECT-THEN-SYNC: селекция на сырых ============
         if self.driver_mode in ("sts_emb", "sts_h", "sts_lq", "sts_lqk"):
             Bn = e.shape[0]
             if self.driver_mode in ("sts_lq", "sts_lqk"):
