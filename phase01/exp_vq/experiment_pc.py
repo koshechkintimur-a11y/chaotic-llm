@@ -110,8 +110,8 @@ def induction_retrieval(model, test_ids, distances=(16, 64, 128, 256), n_trials=
     return res, drv_stats
 
 
-def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode="mean", temp=0.3, layers=4, d=128):
-    print(f"\n=== Training {config} (alpha={alpha}, k={k_init}, T={sync_steps}, drv={driver_mode}, temp={temp}, layers={layers}, d={d}) ===", flush=True)
+def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode="mean", temp=0.3, layers=4, d=128, aux_w=0.0):
+    print(f"\n=== Training {config} (alpha={alpha}, k={k_init}, T={sync_steps}, drv={driver_mode}, temp={temp}, layers={layers}, d={d}, aux_w={aux_w}) ===", flush=True)
     rng = np.random.default_rng(0)
     train_text = load_chars(os.path.join(PHASE, "corpus_train.txt"), MAX_TRAIN)
     test_text = load_chars(os.path.join(PHASE, "corpus_test.txt"))
@@ -144,7 +144,24 @@ def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode=
         Y = torch.tensor([train_ids[i + W] for i in s], dtype=torch.long, device="cuda")
 
         logits = model(X)
-        loss = lossf(logits, Y)
+        main_loss = lossf(logits, Y)
+
+        # ---- auxiliary loss: локализация повторяющегося токена ----
+        aux_loss = torch.tensor(0.0, device="cuda")
+        if model._last_sim is not None and args.aux_w > 0:
+            sim = model._last_sim                                    # [B, W] (маскирован)
+            last_tok = X[:, -1, None]                                # [B, 1]
+            pos_mask = (X == last_tok).float()                       # [B, W]
+            pos_mask[:, W - 8:] = 0.0                                # ту же маску
+            pos_sum = pos_mask.sum(dim=1, keepdim=True)              # [B, 1]
+            valid = (pos_sum > 0).squeeze(1)                         # [B]
+            if valid.any():
+                target = pos_mask / pos_sum.clamp(min=1e-6)          # [B, W]
+                target[~valid] = 0.0
+                log_sm = torch.log_softmax(sim, dim=1)               # [B, W]
+                aux_loss = -(target * log_sm).sum(dim=1)             # [B]
+                aux_loss = aux_loss[valid].mean()                    # скаляр
+        loss = main_loss + args.aux_w * aux_loss
 
         opt.zero_grad()
         loss.backward()
@@ -208,9 +225,10 @@ if __name__ == "__main__":
     ap.add_argument("--alpha", type=float, default=0.9)
     ap.add_argument("--k", type=float, default=1.2)
     ap.add_argument("--sync-steps", type=int, default=1)
-    ap.add_argument("--driver", choices=["mean", "last", "top1", "soft", "crt", "sts_emb", "sts_h"], default="mean")
+    ap.add_argument("--driver", choices=["mean", "last", "top1", "soft", "crt", "sts_emb", "sts_h", "sts_lq", "sts_lqk"], default="mean")
     ap.add_argument("--temp", type=float, default=0.3)
+    ap.add_argument("--aux-w", type=float, default=0.0, dest="aux_w")
     args = ap.parse_args()
     train(args.config, args.steps, alpha=args.alpha, k_init=args.k,
           sync_steps=args.sync_steps, driver_mode=args.driver, temp=args.temp,
-          layers=args.layers, d=args.d)
+          layers=args.layers, d=args.d, aux_w=args.aux_w)

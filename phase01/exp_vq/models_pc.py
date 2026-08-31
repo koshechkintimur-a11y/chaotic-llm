@@ -59,6 +59,10 @@ class PurePCLM(nn.Module):
         self.readout = nn.Sequential(
             nn.Linear(2 * d, d), nn.ReLU(), nn.Linear(d, vocab))
         self.last_driver_pos = None  # для анализа распределения выбранных позиций
+        self.query_proj = nn.Sequential(
+            nn.Linear(d, d), nn.ReLU(), nn.Linear(d, d))
+        self.topk = 8
+        self._last_sim = None  # для auxiliary loss (локализация повтора)
 
     def _address_weights(self, h):
         """Query=последняя позиция, keys=все позиции, cosine.
@@ -110,24 +114,41 @@ class PurePCLM(nn.Module):
     def forward(self, x, return_aux=False):
         e = self.embed(x) + self.pos          # сырые эмбеддинги — идентичность жива
         # SELECT-THEN-SYNC: селекция на сырых, драйвер = сосед (sel+1)
-        if self.driver_mode in ("sts_emb", "sts_h"):
-            qn = e[:, -1, :] / (e[:, -1, :].norm(dim=-1, keepdim=True) + 1e-6)
+        if self.driver_mode in ("sts_emb", "sts_h", "sts_lq", "sts_lqk"):
+            Bn = e.shape[0]
+            if self.driver_mode in ("sts_lq", "sts_lqk"):
+                # learned query: проекция последнего токена (план п.1)
+                q = self.query_proj(e[:, -1, :])
+            else:
+                q = e[:, -1, :]
+            qn = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
             en = e / (e.norm(dim=-1, keepdim=True) + 1e-6)
             sim = (en * qn.unsqueeze(1)).sum(-1)
             sim[:, W - 8:] = -1e9              # маска самовыбора
-            sel = sim.argmax(dim=1)            # [B] похожая позиция (KEY)
-            sel_next = torch.clamp(sel + 1, 0, W - 2)  # сосед KEY (содержит B)
-            self.last_driver_pos = sel_next
-            Bn = e.shape[0]
-            if self.driver_mode == "sts_emb":
-                self._sts_driver = e[torch.arange(Bn, device=e.device), sel_next][:, None, :]
-            # sts_h: драйвер вычислим после микшера ниже
+            if self.driver_mode in ("sts_lq", "sts_lqk"):
+                # soft top-k (план п.3): взвешенная сумма соседей лучших k позиций
+                kk = min(self.topk, W - 8)
+                top_w, top_i = torch.topk(sim, kk, dim=1)     # [B, k]
+                w = torch.softmax(top_w / self.temp, dim=1)   # [B, k]
+                top_next = torch.clamp(top_i + 1, 0, W - 2)   # соседи (B)
+                idx = torch.arange(Bn, device=e.device).unsqueeze(1).expand(Bn, kk)
+                neigh = e[idx, top_next]                       # [B, k, d]
+                self.last_driver_pos = top_next[:, 0]
+                self._sts_driver = (w.unsqueeze(-1) * neigh).sum(dim=1, keepdim=True)
+            else:
+                sel = sim.argmax(dim=1)            # [B] похожая позиция (KEY)
+                sel_next = torch.clamp(sel + 1, 0, W - 2)  # сосед KEY (содержит B)
+                self.last_driver_pos = sel_next
+            self._last_sim = sim  # для auxiliary loss (локализация повтора)
             # хаотическая динамика (смысл)
             h = e
             for blk in self.blocks:
                 h = blk(h, h.mean(dim=1, keepdim=True))
-            if self.driver_mode == "sts_h":
-                self._sts_driver = h[torch.arange(Bn, device=h.device), sel_next][:, None, :]
+            if self.driver_mode in ("sts_emb", "sts_h"):
+                if self.driver_mode == "sts_emb":
+                    self._sts_driver = e[torch.arange(Bn, device=e.device), sel_next][:, None, :]
+                else:
+                    self._sts_driver = h[torch.arange(Bn, device=h.device), sel_next][:, None, :]
             driver = self._sts_driver
             k = torch.clamp(self.k, 0.0, 2.0)
             h_sync = h[:, -1:, :]
