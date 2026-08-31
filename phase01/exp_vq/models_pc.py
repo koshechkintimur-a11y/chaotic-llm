@@ -146,8 +146,7 @@ class PurePCLM(nn.Module):
             logits = self.readout(torch.cat([h_last, g], dim=-1))
             return logits
         # ============ STS-PROG: прогрессивное уточнение селекции ============
-        if self.driver_mode == "sts_prog":
-            # multi-query: последние nquery токенов
+        if self.driver_mode in ("sts_prog", "sts_prog_nopc"):
             q0 = e[:, -self.nquery:, :].mean(dim=1)            # [B, d] raw query
             q = q0
             en = e / (e.norm(dim=-1, keepdim=True) + 1e-6)     # keys СЫРЫЕ (идентичность жива)
@@ -156,7 +155,6 @@ class PurePCLM(nn.Module):
                 qn = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
                 sim = (en * qn.unsqueeze(1)).sum(-1)           # селекция на СЫРЫХ ключах
                 sim[:, W - 8:] = -1e9
-                # soft top-k соседей (sel+1)
                 kk = min(self.topk, W - 8)
                 top_w, top_i = torch.topk(sim, kk, dim=1)
                 w = torch.softmax(top_w / self.temp, dim=1)
@@ -165,13 +163,14 @@ class PurePCLM(nn.Module):
                 neigh = e[idx, top_next]                       # соседи из СЫРЫХ (B жива)
                 driver = (w.unsqueeze(-1) * neigh).sum(dim=1, keepdim=True)
                 self.last_driver_pos = top_next[:, 0]
-                h = blk(h, driver)                             # PC-синхронизация (смысл)
-                # уточняем query контекстом из синхронизированного состояния
+                if self.driver_mode == "sts_prog_nopc":
+                    h = h + driver * 0.0                       # абляция: без хаоса (identity)
+                else:
+                    h = blk(h, driver)                         # PC-синхронизация (смысл)
                 q = q0 + self.query_proj(h[:, -1, :]) * 0.5
             self._last_sim = sim  # для aux loss
             h_last = h[:, -1, :]
             g = h.mean(dim=1)
-            # readout видит: синхронизированное состояние + сырое состояние + глобальный пул
             logits = self.readout3(torch.cat([h_last, q0, g], dim=-1))
             return logits
         # ============ SELECT-THEN-SYNC: селекция на сырых ============

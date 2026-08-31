@@ -257,7 +257,7 @@ if __name__ == "__main__":
     ap.add_argument("--alpha", type=float, default=0.9)
     ap.add_argument("--k", type=float, default=1.2)
     ap.add_argument("--sync-steps", type=int, default=1)
-    ap.add_argument("--driver", choices=["mean", "last", "top1", "soft", "crt", "sts_emb", "sts_h", "sts_lq", "sts_lqk", "sts_prog", "sts_mq"], default="mean")
+    ap.add_argument("--driver", choices=["mean", "last", "top1", "soft", "crt", "sts_emb", "sts_h", "sts_lq", "sts_lqk", "sts_prog", "sts_prog_nopc"], default="mean")
     ap.add_argument("--temp", type=float, default=0.3)
     ap.add_argument("--aux-w", type=float, default=0.0, dest="aux_w")
     ap.add_argument("--aux-mode", choices=["uniform", "nearest", "combo", "curriculum", "multibead"], default="nearest")
