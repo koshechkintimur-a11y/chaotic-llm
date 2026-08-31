@@ -1,12 +1,18 @@
-"""models_pc.py — ЧИСТЫЙ PC-микшер (Пекоры–Кэрролл, полностью без Арнольда).
+"""models_pc.py — ЧИСТЫЙ PC-микшер + Lightweight Address Selection (LAS).
 
 Архитектор: «убираем Арнольда из уравнения, ставим синхронизацию Пекоры–Кэрролла».
-НЕТ permute_indices, НЕТ even/odd coupling, НЕТ Arnold-перестановок.
+НЕТ permute_indices, НЕТ even/odd coupling, НЕТ Arnold.
 
-Вся динамика:
+Динамика:
   1. Хаотическая диссипативная карта: h = h + tanh(h @ W + b) (спектр.радиус W > 1)
-  2. PC-синхронизация: h = h + k * (driver - h) (однонаправленная связь к драйверу)
-  Смешивание по ПОЗИЦИЯМ — только через выбор драйвера (КТО-адрес или mean).
+  2. PC-синхронизация: h = h + k * (driver - h)
+
+Селекция драйвера (lightweight address, O(W·d)):
+  mean  — глобальный пул (базовая линия, разбавляет KEY в 256×)
+  last  — контроль: driver = последняя позиция (без селекции)
+  top1  — query=последняя позиция, keys=все, cosine, берём 1 позицию argmax
+  soft  — softmax(cosine/temp) по позициям, взвешенная сумма
+  crt   — КТО-сумма (провалился ранее, оставлен для сравнения)
 """
 import math
 import torch
@@ -21,34 +27,28 @@ def count_params(m):
 
 
 class PurePCBlock(nn.Module):
-    """Чистый PC-блок: НЕТ Arnold, НЕТ even/odd coupling.
-    Хаотическая динамика (residual + tanh) + PC-синхронизация к драйверу."""
+    """Чистый PC-блок: НЕТ Arnold. Хаотическая карта + PC-синхронизация к драйверу."""
     def __init__(self, d, k=1.2):
         super().__init__()
-        # матрица со спектральным радиусом >1 (хаос) + tanh сжимает (диссипация)
         self.W = nn.Parameter(torch.eye(d) * 1.5 + torch.randn(d, d) * 0.05)
         self.b = nn.Parameter(torch.zeros(d))
         self.k = k
 
     def forward(self, h, driver):
-        # хаотическая динамика: растяжение (W) + нелинейность (tanh) = диссипативный хаос
-        h = h + torch.tanh(h @ self.W + self.b) * 0.3
-        # PC-синхронизация к драйверу (однонаправленная)
-        h = h + self.k * (driver - h)
+        h = h + torch.tanh(h @ self.W + self.b) * 0.3   # диссипативный хаос
+        h = h + self.k * (driver - h)                    # PC-синхронизация
         return h
 
 
 class PurePCLM(nn.Module):
-    """Чистый PC-микшер LM: без Арнольда, только хаотическая динамика + PC-синхронизация.
-    driver_mode: 'mean' | 'crt' (КТО-селекция по позиции запроса)
-    """
     def __init__(self, vocab=512, d=128, layers=4, k_init=1.2,
-                 sync_steps=1, driver_mode="mean", primes=(3, 5, 7, 11)):
+                 sync_steps=1, driver_mode="mean", temp=0.3, primes=(3, 5, 7, 11)):
         super().__init__()
         self.d = d
         self.layers = layers
         self.sync_steps = sync_steps
         self.driver_mode = driver_mode
+        self.temp = temp
         self.primes = list(primes)
         self.embed = nn.Embedding(vocab, d)
         self.pos = nn.Parameter(torch.randn(1, W, d) * 0.02)
@@ -58,12 +58,37 @@ class PurePCLM(nn.Module):
             self.crt_proj = nn.ModuleList([nn.Linear(d, d) for _ in primes])
         self.readout = nn.Sequential(
             nn.Linear(2 * d, d), nn.ReLU(), nn.Linear(d, vocab))
+        self.last_driver_pos = None  # для анализа распределения выбранных позиций
+
+    def _address_weights(self, h):
+        """Query=последняя позиция, keys=все позиции, cosine. Возвращает веса [B, W]."""
+        q = h[:, -1, :]                                   # [B, d]
+        qn = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
+        hn = h / (h.norm(dim=-1, keepdim=True) + 1e-6)    # [B, W, d]
+        sim = (hn * qn.unsqueeze(1)).sum(-1)              # [B, W] cosine
+        return sim
 
     def _select_driver(self, h):
-        """Выбор драйвера для readout-позиции (W-1)."""
-        if self.driver_mode == "mean":
-            return h.mean(dim=1, keepdim=True)  # [B,1,d]
-        elif self.driver_mode == "crt":
+        """Выбор драйвера для readout-позиции (W-1). Записывает позиции для анализа."""
+        B = h.shape[0]
+        m = self.driver_mode
+        if m == "mean":
+            driver = h.mean(dim=1, keepdim=True)
+            self.last_driver_pos = torch.full((B,), -1, dtype=torch.long, device=h.device)
+        elif m == "last":
+            driver = h[:, -1:, :]                          # контроль: сам последний токен
+            self.last_driver_pos = torch.full((B,), W - 1, dtype=torch.long, device=h.device)
+        elif m == "top1":
+            sim = self._address_weights(h)                 # [B, W]
+            idx = sim.argmax(dim=1)                        # [B]
+            self.last_driver_pos = idx
+            driver = h[torch.arange(B, device=h.device), idx][:, None, :]
+        elif m == "soft":
+            sim = self._address_weights(h) / self.temp
+            w = torch.softmax(sim, dim=1)                  # [B, W]
+            self.last_driver_pos = w.argmax(dim=1)
+            driver = (w.unsqueeze(-1) * h).sum(dim=1, keepdim=True)
+        elif m == "crt":
             i = W - 1
             buckets = []
             for pi, p in enumerate(self.primes):
@@ -71,15 +96,19 @@ class PurePCLM(nn.Module):
                 sel = h[:, mask]
                 b = self.crt_proj[pi](sel).sum(dim=1, keepdim=True)
                 buckets.append(b)
-            return torch.cat(buckets, dim=1).mean(dim=1, keepdim=True)
+            driver = torch.cat(buckets, dim=1).mean(dim=1, keepdim=True)
+            self.last_driver_pos = torch.full((B,), -2, dtype=torch.long, device=h.device)
+        else:
+            raise ValueError(f"unknown driver_mode {m}")
+        return driver
 
     def forward(self, x, return_aux=False):
         h = self.embed(x) + self.pos
-        # стек блоков чистой PC-синхронизации
-        driver_seq = self._select_driver(h)  # общий драйвер на всю последовательность блоков
+        # динамическая селекция на каждом блоке (итеративная синхронизация)
         for blk in self.blocks:
-            h = blk(h, driver_seq)
-        # финальная PC-синхронизация readout c T шагами
+            driver = self._select_driver(h)
+            h = blk(h, driver)
+        # финальная синхронизация readout c T шагами
         driver = self._select_driver(h)
         k = torch.clamp(self.k, 0.0, 2.0)
         h_sync = h[:, -1:, :]
@@ -94,16 +123,17 @@ class PurePCLM(nn.Module):
 
 
 def build_pc_model(config, vocab=512, d=128, alpha=0.9, k_init=1.2,
-                   sync_steps=1, driver_mode="mean"):
+                   sync_steps=1, driver_mode="mean", temp=0.3):
     if config == "pc":
         return PurePCLM(vocab=vocab, d=d, layers=4, k_init=k_init,
-                        sync_steps=sync_steps, driver_mode=driver_mode)
+                        sync_steps=sync_steps, driver_mode=driver_mode, temp=temp)
     raise ValueError(f"unknown {config}")
 
 
 if __name__ == "__main__":
-    for cfg in ["pc"]:
-        m = build_pc_model(cfg)
+    for mode in ["mean", "last", "top1", "soft", "crt"]:
+        m = build_pc_model("pc", driver_mode=mode)
         x = torch.randint(0, 512, (2, W))
         y = m(x)
-        print(f"{cfg}: params={count_params(m):,} out={tuple(y.shape)}")
+        pos = m.last_driver_pos
+        print(f"{mode}: params={count_params(m):,} out={tuple(y.shape)} last_driver_pos={pos.tolist()}")

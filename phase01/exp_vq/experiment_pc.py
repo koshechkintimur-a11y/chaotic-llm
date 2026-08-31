@@ -62,12 +62,14 @@ def gated_ppl(logits, targets, prior, V, ctx_tokens=None):
 
 
 def induction_retrieval(model, test_ids, distances=(16, 64, 128, 256), n_trials=200):
-    """Честный индукционный тест: KEY→B реального паттерна, KEY на дистанции L."""
+    """Честный индукционный тест + сбор распределения выбранных позиций драйвера."""
     model.eval()
     rng = np.random.default_rng(0)
     res = {}
+    all_pos = []
     for L in distances:
         hits, miss = 0, 0
+        pos_L = []
         for _ in range(n_trials):
             i = int(rng.integers(L + 2, len(test_ids) - L - 3))
             A = int(test_ids[i])
@@ -78,17 +80,25 @@ def induction_retrieval(model, test_ids, distances=(16, 64, 128, 256), n_trials=
             X = torch.tensor([window], dtype=torch.long, device="cuda")
             with torch.no_grad():
                 out = model(X)
+                if hasattr(model, 'last_driver_pos') and model.last_driver_pos is not None:
+                    p = int(model.last_driver_pos[0].item())
+                    pos_L.append(p)
+                    all_pos.append(p)
             logits = out[0] if isinstance(out, tuple) else out
             pred = int(logits[0].argmax().item())
             if pred == B:
                 hits += 1
             miss += 1
         res[L] = hits / max(1, miss)
-    return res
+    drv_stats = {}
+    if all_pos:
+        drv_stats["mean"] = float(np.mean(all_pos))
+        drv_stats["tail_frac"] = float(np.mean([1 if p >= W - 32 else 0 for p in all_pos]))
+    return res, drv_stats
 
 
-def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode="mean"):
-    print(f"\n=== Training {config} (alpha={alpha}, k={k_init}, T={sync_steps}, drv={driver_mode}) ===", flush=True)
+def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode="mean", temp=0.3):
+    print(f"\n=== Training {config} (alpha={alpha}, k={k_init}, T={sync_steps}, drv={driver_mode}, temp={temp}) ===", flush=True)
     rng = np.random.default_rng(0)
     train_text = load_chars(os.path.join(PHASE, "corpus_train.txt"), MAX_TRAIN)
     test_text = load_chars(os.path.join(PHASE, "corpus_test.txt"))
@@ -99,7 +109,8 @@ def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode=
     print(f"V={V} train={len(train_ids):,} test={len(test_ids):,}", flush=True)
 
     model = build_pc_model(config, V, alpha=alpha, k_init=k_init,
-                           sync_steps=sync_steps, driver_mode=driver_mode).to("cuda")
+                           sync_steps=sync_steps, driver_mode=driver_mode,
+                           temp=temp).to("cuda")
     nparam = sum(p.numel() for p in model.parameters())
     print(f"params={nparam:,}", flush=True)
 
@@ -153,15 +164,19 @@ def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode=
     ctx_tokens = [tuple(test_ids[s + W - 2:s + W]) for s in te_starts]
     gated = gated_ppl(lpm, y_te, prior, V, ctx_tokens)
 
-    retrieval = induction_retrieval(model, test_ids)
+    # индукционный retrieval + распределение выбранных драйверов
+    retrieval, drv_stats = induction_retrieval(model, test_ids)
+    drv_mean = drv_stats.get("mean", -1.0)
+    drv_tail_frac = drv_stats.get("tail_frac", -1.0)  # доля выбранных позиций в последних 32
 
     res = {
         "config": config, "params": nparam,
         "mixer_ppl": round(mixer_ppl, 3), "gated_ppl": round(gated, 3),
         "retrieval": {str(k): round(v, 4) for k, v in retrieval.items()},
+        "drv_mean_pos": round(drv_mean, 2), "drv_tail_frac": round(drv_tail_frac, 3),
     }
     print(f"[{config}] mixer={mixer_ppl:.3f} gated={gated:.3f} "
-          f"retrieval={retrieval}", flush=True)
+          f"retrieval={retrieval} drv_mean={drv_mean:.1f} tail={drv_tail_frac:.3f}", flush=True)
 
     with open(os.path.join(HERE, f"results_{config}.json"), "w") as f:
         json.dump(res, f)
@@ -176,7 +191,8 @@ if __name__ == "__main__":
     ap.add_argument("--alpha", type=float, default=0.9)
     ap.add_argument("--k", type=float, default=1.2)
     ap.add_argument("--sync-steps", type=int, default=1)
-    ap.add_argument("--driver", choices=["mean", "crt"], default="mean")
+    ap.add_argument("--driver", choices=["mean", "last", "top1", "soft", "crt"], default="mean")
+    ap.add_argument("--temp", type=float, default=0.3)
     args = ap.parse_args()
     train(args.config, args.steps, alpha=args.alpha, k_init=args.k,
-          sync_steps=args.sync_steps, driver_mode=args.driver)
+          sync_steps=args.sync_steps, driver_mode=args.driver, temp=args.temp)
