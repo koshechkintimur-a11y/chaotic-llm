@@ -137,7 +137,7 @@ def train(config, steps=STEPS):
             logits, exact_logits, commit, cb, usage = out
             main_loss = lossf(logits, Y)
             aux_loss = lossf(exact_logits, Y)
-            loss = main_loss + model.aux_w * aux_loss + model.vq.vq_w * (commit + cb)
+            loss = main_loss + model.aux_w * aux_loss + model.vq_w * (commit + cb)
         elif config == "nochao":
             logits, exact_logits, commit, cb, usage = out
             main_loss = lossf(logits, Y)
@@ -145,7 +145,7 @@ def train(config, steps=STEPS):
             loss = main_loss + 0.1 * aux_loss + model.vq_w * (commit + cb)
         else:
             logits, commit, cb, usage, idx = out
-            loss = lossf(logits, Y) + model.vq.vq_w * (commit + cb)
+            loss = lossf(logits, Y) + model.vq_w * (commit + cb)
 
         opt.zero_grad()
         loss.backward()

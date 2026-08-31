@@ -1,0 +1,1 @@
+{"config": "vq_only", "params": 295692, "mixer_ppl": 52.993, "gated_ppl": 9.807, "retrieval": {"16": 0.0, "64": 0.0476, "128": 0.0, "256": 0.0}, "codebook_usage": 0.684}
