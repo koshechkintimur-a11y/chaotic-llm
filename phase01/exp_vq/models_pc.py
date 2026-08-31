@@ -58,6 +58,8 @@ class PurePCLM(nn.Module):
             self.crt_proj = nn.ModuleList([nn.Linear(d, d) for _ in primes])
         self.readout = nn.Sequential(
             nn.Linear(2 * d, d), nn.ReLU(), nn.Linear(d, vocab))
+        self.readout3 = nn.Sequential(  # для sts_prog (3 входа: h + q0 + g)
+            nn.Linear(3 * d, d), nn.ReLU(), nn.Linear(d, vocab))
         self.last_driver_pos = None  # для анализа распределения выбранных позиций
         self.query_proj = nn.Sequential(
             nn.Linear(d, d), nn.ReLU(), nn.Linear(d, d))
@@ -115,6 +117,34 @@ class PurePCLM(nn.Module):
     def forward(self, x, return_aux=False):
         e = self.embed(x) + self.pos          # сырые эмбеддинги — идентичность жива
         Bn = e.shape[0]
+        # ============ STS-MQ: multi-query single-shot ============
+        if self.driver_mode == "sts_mq":
+            q = e[:, -self.nquery:, :].mean(dim=1)            # [B, d] query из 4 токенов
+            qn = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
+            en = e / (e.norm(dim=-1, keepdim=True) + 1e-6)
+            sim = (en * qn.unsqueeze(1)).sum(-1)              # селекция на СЫРЫХ ключах
+            sim[:, W - 8:] = -1e9
+            kk = min(self.topk, W - 8)
+            top_w, top_i = torch.topk(sim, kk, dim=1)
+            w = torch.softmax(top_w / self.temp, dim=1)
+            top_next = torch.clamp(top_i + 1, 0, W - 2)
+            idx = torch.arange(Bn, device=e.device).unsqueeze(1).expand(Bn, kk)
+            neigh = e[idx, top_next]                          # соседи из СЫРЫХ (B жива)
+            self._sts_driver = (w.unsqueeze(-1) * neigh).sum(dim=1, keepdim=True)
+            self.last_driver_pos = top_next[:, 0]
+            self._last_sim = sim
+            h = e
+            for blk in self.blocks:
+                h = blk(h, h.mean(dim=1, keepdim=True))       # хаотическая динамика (смысл)
+            driver = self._sts_driver
+            k = torch.clamp(self.k, 0.0, 2.0)
+            h_sync = h[:, -1:, :]
+            for _ in range(self.sync_steps):
+                h_sync = h_sync + k * (driver - h_sync)
+            h_last = h_sync[:, -1, :]
+            g = h.mean(dim=1)
+            logits = self.readout(torch.cat([h_last, g], dim=-1))
+            return logits
         # ============ STS-PROG: прогрессивное уточнение селекции ============
         if self.driver_mode == "sts_prog":
             # multi-query: последние nquery токенов
@@ -141,7 +171,8 @@ class PurePCLM(nn.Module):
             self._last_sim = sim  # для aux loss
             h_last = h[:, -1, :]
             g = h.mean(dim=1)
-            logits = self.readout(torch.cat([h_last, g], dim=-1))
+            # readout видит: синхронизированное состояние + сырое состояние + глобальный пул
+            logits = self.readout3(torch.cat([h_last, q0, g], dim=-1))
             return logits
         # ============ SELECT-THEN-SYNC: селекция на сырых ============
         if self.driver_mode in ("sts_emb", "sts_h", "sts_lq", "sts_lqk"):
