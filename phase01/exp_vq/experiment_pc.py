@@ -144,6 +144,8 @@ def train(config, steps=STEPS, alpha=0.9, k_init=1.2, sync_steps=1, driver_mode=
 
     # ---- eval ----
     model.eval()
+    # сохраняем чекпоинт для диагностики (скрытые состояния, селекция)
+    torch.save(model.state_dict(), os.path.join(HERE, f"model_{config}.pt"))
     rng2 = np.random.default_rng(42)
     te_starts = np.sort(rng2.choice(len(test_ids) - W - 1, size=N_EVAL, replace=False))
 
@@ -191,7 +193,7 @@ if __name__ == "__main__":
     ap.add_argument("--alpha", type=float, default=0.9)
     ap.add_argument("--k", type=float, default=1.2)
     ap.add_argument("--sync-steps", type=int, default=1)
-    ap.add_argument("--driver", choices=["mean", "last", "top1", "soft", "crt"], default="mean")
+    ap.add_argument("--driver", choices=["mean", "last", "top1", "soft", "crt", "sts_emb", "sts_h"], default="mean")
     ap.add_argument("--temp", type=float, default=0.3)
     args = ap.parse_args()
     train(args.config, args.steps, alpha=args.alpha, k_init=args.k,

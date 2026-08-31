@@ -108,12 +108,43 @@ class PurePCLM(nn.Module):
         return driver
 
     def forward(self, x, return_aux=False):
-        h = self.embed(x) + self.pos
-        # динамическая селекция на каждом блоке (итеративная синхронизация)
+        e = self.embed(x) + self.pos          # сырые эмбеддинги — идентичность жива
+        # SELECT-THEN-SYNC: селекция на сырых, драйвер = сосед (sel+1)
+        if self.driver_mode in ("sts_emb", "sts_h"):
+            qn = e[:, -1, :] / (e[:, -1, :].norm(dim=-1, keepdim=True) + 1e-6)
+            en = e / (e.norm(dim=-1, keepdim=True) + 1e-6)
+            sim = (en * qn.unsqueeze(1)).sum(-1)
+            sim[:, W - 8:] = -1e9              # маска самовыбора
+            sel = sim.argmax(dim=1)            # [B] похожая позиция (KEY)
+            sel_next = torch.clamp(sel + 1, 0, W - 2)  # сосед KEY (содержит B)
+            self.last_driver_pos = sel_next
+            Bn = e.shape[0]
+            if self.driver_mode == "sts_emb":
+                self._sts_driver = e[torch.arange(Bn, device=e.device), sel_next][:, None, :]
+            # sts_h: драйвер вычислим после микшера ниже
+            # хаотическая динамика (смысл)
+            h = e
+            for blk in self.blocks:
+                h = blk(h, h.mean(dim=1, keepdim=True))
+            if self.driver_mode == "sts_h":
+                self._sts_driver = h[torch.arange(Bn, device=h.device), sel_next][:, None, :]
+            driver = self._sts_driver
+            k = torch.clamp(self.k, 0.0, 2.0)
+            h_sync = h[:, -1:, :]
+            for _ in range(self.sync_steps):
+                h_sync = h_sync + k * (driver - h_sync)
+            h_last = h_sync[:, -1, :]
+            g = h.mean(dim=1)
+            logits = self.readout(torch.cat([h_last, g], dim=-1))
+            if return_aux:
+                return logits, h_sync
+            return logits
+
+        # обычный путь: динамика + селекция после
+        h = e
         for blk in self.blocks:
             driver = self._select_driver(h)
             h = blk(h, driver)
-        # финальная синхронизация readout c T шагами
         driver = self._select_driver(h)
         k = torch.clamp(self.k, 0.0, 2.0)
         h_sync = h[:, -1:, :]
