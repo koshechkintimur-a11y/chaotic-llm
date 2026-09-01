@@ -1,0 +1,42 @@
+{
+  "name": "transformer_final_agg",
+  "driver_mode": "__transformer__",
+  "model": "TransformerLM",
+  "d": 88,
+  "layers": 8,
+  "params": 865904,
+  "n_seeds": 3,
+  "results": {
+    "mixer_ppl_mean": 21.569,
+    "mixer_ppl_std": 0.261,
+    "mixer_ppl_min": 21.222,
+    "mixer_ppl_max": 21.852
+  },
+  "retrieval_mean": {
+    "L16": {
+      "mean": 0.2433,
+      "std": 0.0165,
+      "n_seeds": 3
+    },
+    "L32": {
+      "mean": 0.205,
+      "std": 0.0414,
+      "n_seeds": 3
+    },
+    "L64": {
+      "mean": 0.18,
+      "std": 0.0334,
+      "n_seeds": 3
+    },
+    "L128": {
+      "mean": 0.1883,
+      "std": 0.0189,
+      "n_seeds": 3
+    },
+    "L256": {
+      "mean": 0.195,
+      "std": 0.0286,
+      "n_seeds": 3
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "name": "nopc_final_agg",
+  "driver_mode": "sts_prog_nopc",
+  "model": "PurePCLM",
+  "d": 192,
+  "layers": 8,
+  "params": 900353,
+  "n_seeds": 3,
+  "results": {
+    "mixer_ppl_mean": 19.678,
+    "mixer_ppl_std": 0.233,
+    "mixer_ppl_min": 19.507,
+    "mixer_ppl_max": 20.007
+  },
+  "retrieval_mean": {
+    "L16": {
+      "mean": 0.19,
+      "std": 0.0212,
+      "n_seeds": 3
+    },
+    "L32": {
+      "mean": 0.1633,
+      "std": 0.0517,
+      "n_seeds": 3
+    },
+    "L64": {
+      "mean": 0.1517,
+      "std": 0.0094,
+      "n_seeds": 3
+    },
+    "L128": {
+      "mean": 0.18,
+      "std": 0.0294,
+      "n_seeds": 3
+    },
+    "L256": {
+      "mean": 0.18,
+      "std": 0.0286,
+      "n_seeds": 3
+    }
+  }
+}

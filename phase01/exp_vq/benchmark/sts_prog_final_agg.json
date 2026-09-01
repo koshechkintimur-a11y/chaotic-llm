@@ -1,0 +1,42 @@
+{
+  "name": "sts_prog_final_agg",
+  "driver_mode": "sts_prog",
+  "model": "PurePCLM",
+  "d": 192,
+  "layers": 8,
+  "params": 900353,
+  "n_seeds": 3,
+  "results": {
+    "mixer_ppl_mean": 17.936,
+    "mixer_ppl_std": 0.295,
+    "mixer_ppl_min": 17.522,
+    "mixer_ppl_max": 18.181
+  },
+  "retrieval_mean": {
+    "L16": {
+      "mean": 0.3817,
+      "std": 0.0473,
+      "n_seeds": 3
+    },
+    "L32": {
+      "mean": 0.39,
+      "std": 0.0426,
+      "n_seeds": 3
+    },
+    "L64": {
+      "mean": 0.3533,
+      "std": 0.0131,
+      "n_seeds": 3
+    },
+    "L128": {
+      "mean": 0.3617,
+      "std": 0.0239,
+      "n_seeds": 3
+    },
+    "L256": {
+      "mean": 0.32,
+      "std": 0.0349,
+      "n_seeds": 3
+    }
+  }
+}

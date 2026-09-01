@@ -1,0 +1,1 @@
+{"config": "vq_kto", "params": 435628, "mixer_ppl": 57.384, "gated_ppl": 9.929, "retrieval": {"16": 0.0, "64": 0.0, "128": 0.05, "256": 0.0}, "codebook_usage": 0.676}

@@ -1,0 +1,67 @@
+{
+  "name": "sts_prog_final_seed1",
+  "driver_mode": "sts_prog",
+  "model": "PurePCLM",
+  "d": 192,
+  "layers": 8,
+  "vocab": null,
+  "params": 900353,
+  "results": {
+    "mixer_ppl": 17.522,
+    "gated_ppl": null,
+    "n_eval": null
+  },
+  "retrieval": {
+    "L16": {
+      "hits": 82,
+      "n_valid": 200,
+      "rate": 0.41
+    },
+    "L32": {
+      "hits": 90,
+      "n_valid": 200,
+      "rate": 0.45
+    },
+    "L64": {
+      "hits": 67,
+      "n_valid": 200,
+      "rate": 0.335
+    },
+    "L128": {
+      "hits": 70,
+      "n_valid": 200,
+      "rate": 0.35
+    },
+    "L256": {
+      "hits": 63,
+      "n_valid": 200,
+      "rate": 0.315
+    }
+  },
+  "provenance": {
+    "steps": 6000,
+    "batch": 64,
+    "lr": 0.0005,
+    "warmup": 1000,
+    "seed": 1,
+    "seed_retrieval": 1,
+    "time_s": 289.4684555530548,
+    "source": "results\\final_benchmark.json",
+    "git": {
+      "commit": "47877a6f5e6603b1d66a3e615b2b34a58e5bf7f0",
+      "dirty": null,
+      "branch": null
+    },
+    "env": {
+      "device": "cuda"
+    },
+    "corpus": {
+      "name": "последние 20% train-корпуса",
+      "path": null,
+      "sha256_8mb": null,
+      "n_train_tokens": null,
+      "n_test_tokens": null,
+      "vocab": null
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "kind": "transformer_night",
+  "d": 116,
+  "layers": 8,
+  "params": 1452832,
+  "mixer_ppl": 38.215,
+  "gated_ppl": 22.277,
+  "retrieval": {
+    "L16": 0.0,
+    "L64": 0.167,
+    "L128": 0.333,
+    "L256": 0.4
+  },
+  "time_s": 495.7
+}

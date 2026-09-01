@@ -1,0 +1,15 @@
+{
+  "kind": "sts_prog_night",
+  "d": 256,
+  "layers": 12,
+  "params": 1446145,
+  "mixer_ppl": 25.646,
+  "gated_ppl": 17.432,
+  "retrieval": {
+    "L16": 0.667,
+    "L64": 0.333,
+    "L128": 0.333,
+    "L256": 0.6
+  },
+  "time_s": 697.1
+}

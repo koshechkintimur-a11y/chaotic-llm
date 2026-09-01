@@ -1,0 +1,67 @@
+{
+  "name": "transformer_final_seed1",
+  "driver_mode": "__transformer__",
+  "model": "TransformerLM",
+  "d": 88,
+  "layers": 8,
+  "vocab": null,
+  "params": 865904,
+  "results": {
+    "mixer_ppl": 21.634,
+    "gated_ppl": null,
+    "n_eval": null
+  },
+  "retrieval": {
+    "L16": {
+      "hits": 51,
+      "n_valid": 200,
+      "rate": 0.255
+    },
+    "L32": {
+      "hits": 50,
+      "n_valid": 200,
+      "rate": 0.25
+    },
+    "L64": {
+      "hits": 38,
+      "n_valid": 200,
+      "rate": 0.19
+    },
+    "L128": {
+      "hits": 43,
+      "n_valid": 200,
+      "rate": 0.215
+    },
+    "L256": {
+      "hits": 47,
+      "n_valid": 200,
+      "rate": 0.235
+    }
+  },
+  "provenance": {
+    "steps": 6000,
+    "batch": 64,
+    "lr": 0.0005,
+    "warmup": 1000,
+    "seed": 1,
+    "seed_retrieval": 1,
+    "time_s": 363.0321292877197,
+    "source": "results\\final_benchmark.json",
+    "git": {
+      "commit": "47877a6f5e6603b1d66a3e615b2b34a58e5bf7f0",
+      "dirty": null,
+      "branch": null
+    },
+    "env": {
+      "device": "cuda"
+    },
+    "corpus": {
+      "name": "последние 20% train-корпуса",
+      "path": null,
+      "sha256_8mb": null,
+      "n_train_tokens": null,
+      "n_test_tokens": null,
+      "vocab": null
+    }
+  }
+}

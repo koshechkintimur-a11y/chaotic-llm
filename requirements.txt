@@ -1,0 +1,9 @@
+# Основные зависимости (проверено на torch 2.x + CUDA 12)
+torch>=2.0
+numpy>=1.24
+tokenizers>=0.14
+
+# Для ночных прогонов на Stack корпус не входит в репозиторий:
+# phase01/corpus_stack_train.txt скачивается отдельно.
+# Малый корпус phase01/corpus_train.txt тоже в .gitignore —
+# перед прогоном benchmark.py положи его рядом или собери build_corpus.py.

@@ -1,0 +1,1 @@
+{"config": "baseline", "params": 230156, "mixer_ppl": 40.429, "gated_ppl": 9.461, "retrieval": {"16": 0.0, "64": 0.0476, "128": 0.0, "256": 0.0}, "codebook_usage": 0.0}
