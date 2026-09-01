@@ -78,7 +78,7 @@ class PurePCLM(nn.Module):
         hn = h / (h.norm(dim=-1, keepdim=True) + 1e-6)    # [B, W, d]
         sim = (hn * qn.unsqueeze(1)).sum(-1)              # [B, W] cosine
         # маскируем последние 8 позиций (включая саму query) — запрещаем самовыбор
-        sim[:, W - 8:] = -1e9
+        sim[:, h.shape[1] - 8:] = -1e9
         return sim
 
     def _select_driver(self, h):
@@ -90,7 +90,7 @@ class PurePCLM(nn.Module):
             self.last_driver_pos = torch.full((B,), -1, dtype=torch.long, device=h.device)
         elif m == "last":
             driver = h[:, -1:, :]                          # контроль: сам последний токен
-            self.last_driver_pos = torch.full((B,), W - 1, dtype=torch.long, device=h.device)
+            self.last_driver_pos = torch.full((B,), h.shape[1] - 1, dtype=torch.long, device=h.device)
         elif m == "top1":
             sim = self._address_weights(h)                 # [B, W]
             idx = sim.argmax(dim=1)                        # [B]
@@ -102,10 +102,10 @@ class PurePCLM(nn.Module):
             self.last_driver_pos = w.argmax(dim=1)
             driver = (w.unsqueeze(-1) * h).sum(dim=1, keepdim=True)
         elif m == "crt":
-            i = W - 1
+            i = h.shape[1] - 1
             buckets = []
             for pi, p in enumerate(self.primes):
-                mask = (torch.arange(W, device=h.device) % p) == (i % p)
+                mask = (torch.arange(h.shape[1], device=h.device) % p) == (i % p)
                 sel = h[:, mask]
                 b = self.crt_proj[pi](sel).sum(dim=1, keepdim=True)
                 buckets.append(b)
@@ -118,6 +118,7 @@ class PurePCLM(nn.Module):
     def forward(self, x, return_aux=False):
         e = self.embed(x) + self.pos          # сырые эмбеддинги — идентичность жива
         Bn = e.shape[0]
+        Wc = x.shape[1]                        # фактическая длина окна (для scaling)
         k_eff = torch.sigmoid(self.k)         # обучаемый, всегда в [0,1] — стягивание
         # ============ STS-MQ: multi-query single-shot ============
         if self.driver_mode == "sts_mq":
@@ -125,11 +126,11 @@ class PurePCLM(nn.Module):
             qn = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
             en = e / (e.norm(dim=-1, keepdim=True) + 1e-6)
             sim = (en * qn.unsqueeze(1)).sum(-1)              # селекция на СЫРЫХ ключах
-            sim[:, W - 8:] = -1e9
-            kk = min(self.topk, W - 8)
+            sim[:, Wc - 8:] = -1e9
+            kk = min(self.topk, Wc - 8)
             top_w, top_i = torch.topk(sim, kk, dim=1)
             w = torch.softmax(top_w / self.temp, dim=1)
-            top_next = torch.clamp(top_i + 1, 0, W - 2)
+            top_next = torch.clamp(top_i + 1, 0, Wc - 2)
             idx = torch.arange(Bn, device=e.device).unsqueeze(1).expand(Bn, kk)
             neigh = e[idx, top_next]                          # соседи из СЫРЫХ (B жива)
             self._sts_driver = (w.unsqueeze(-1) * neigh).sum(dim=1, keepdim=True)
@@ -156,11 +157,11 @@ class PurePCLM(nn.Module):
             for li, blk in enumerate(self.blocks):
                 qn = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
                 sim = (en * qn.unsqueeze(1)).sum(-1)           # селекция на СЫРЫХ ключах
-                sim[:, W - 8:] = -1e9
-                kk = min(self.topk, W - 8)
+                sim[:, Wc - 8:] = -1e9
+                kk = min(self.topk, Wc - 8)
                 top_w, top_i = torch.topk(sim, kk, dim=1)
                 w = torch.softmax(top_w / self.temp, dim=1)
-                top_next = torch.clamp(top_i + 1, 0, W - 2)
+                top_next = torch.clamp(top_i + 1, 0, Wc - 2)
                 idx = torch.arange(Bn, device=e.device).unsqueeze(1).expand(Bn, kk)
                 neigh = e[idx, top_next]                       # соседи из СЫРЫХ (B жива)
                 driver = (w.unsqueeze(-1) * neigh).sum(dim=1, keepdim=True)
@@ -186,20 +187,20 @@ class PurePCLM(nn.Module):
             qn = q / (q.norm(dim=-1, keepdim=True) + 1e-6)
             en = e / (e.norm(dim=-1, keepdim=True) + 1e-6)
             sim = (en * qn.unsqueeze(1)).sum(-1)
-            sim[:, W - 8:] = -1e9              # маска самовыбора
+            sim[:, Wc - 8:] = -1e9              # маска самовыбора
             if self.driver_mode in ("sts_lq", "sts_lqk"):
                 # soft top-k (план п.3): взвешенная сумма соседей лучших k позиций
-                kk = min(self.topk, W - 8)
+                kk = min(self.topk, Wc - 8)
                 top_w, top_i = torch.topk(sim, kk, dim=1)     # [B, k]
                 w = torch.softmax(top_w / self.temp, dim=1)   # [B, k]
-                top_next = torch.clamp(top_i + 1, 0, W - 2)   # соседи (B)
+                top_next = torch.clamp(top_i + 1, 0, Wc - 2)   # соседи (B)
                 idx = torch.arange(Bn, device=e.device).unsqueeze(1).expand(Bn, kk)
                 neigh = e[idx, top_next]                       # [B, k, d]
                 self.last_driver_pos = top_next[:, 0]
                 self._sts_driver = (w.unsqueeze(-1) * neigh).sum(dim=1, keepdim=True)
             else:
                 sel = sim.argmax(dim=1)            # [B] похожая позиция (KEY)
-                sel_next = torch.clamp(sel + 1, 0, W - 2)  # сосед KEY (содержит B)
+                sel_next = torch.clamp(sel + 1, 0, Wc - 2)  # сосед KEY (содержит B)
                 self.last_driver_pos = sel_next
             self._last_sim = sim  # для auxiliary loss (локализация повтора)
             # хаотическая динамика (смысл)
