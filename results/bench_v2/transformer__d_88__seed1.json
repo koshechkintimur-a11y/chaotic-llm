@@ -1,0 +1,38 @@
+{
+  "params": 865904,
+  "seed": 1,
+  "ppl": 50.154,
+  "train": {
+    "final_ppl": 30.9883975982666,
+    "best_ppl": 14.501533508300781,
+    "best_step": 5000,
+    "time": 923.1692202091217
+  },
+  "retrieval": {
+    "16": {
+      "trials": 300,
+      "hits": 56,
+      "accuracy": 0.18666666666666668
+    },
+    "32": {
+      "trials": 300,
+      "hits": 63,
+      "accuracy": 0.21
+    },
+    "64": {
+      "trials": 300,
+      "hits": 60,
+      "accuracy": 0.2
+    },
+    "128": {
+      "trials": 300,
+      "hits": 57,
+      "accuracy": 0.19
+    },
+    "256": {
+      "trials": 300,
+      "hits": 53,
+      "accuracy": 0.17666666666666667
+    }
+  }
+}
