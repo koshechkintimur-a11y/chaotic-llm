@@ -173,7 +173,7 @@ def main():
     test_ids = ids[SUB:SUB + SUB // 10]
     print(f"  train: {len(train_ids):,} test: {len(test_ids):,}", flush=True)
 
-    model = PurePCLM(V).to("cuda")
+    model = PurePCLM(V, d=D_MODEL, layers=LAYERS).to("cuda")
     n = sum(p.numel() for p in model.parameters())
     print(f"model: {n:,} params", flush=True)
 
@@ -246,4 +246,14 @@ def main():
     print("saved results_night.json", flush=True)
 
 if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--d", type=int, default=D_MODEL)
+    ap.add_argument("--layers", type=int, default=LAYERS)
+    ap.add_argument("--steps", type=int, default=STEPS)
+    ap.add_argument("--sub", type=int, default=SUB)
+    ap.add_argument("--batch", type=int, default=BATCH)
+    args = ap.parse_args()
+    D_MODEL, LAYERS = args.d, args.layers
+    STEPS, SUB, BATCH = args.steps, args.sub, args.batch
     main()

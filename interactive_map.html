@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>ChaoticLLM — интерактивная карта проекта</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3; --dim:#8b949e;
+    --ok:#3fb950; --partial:#d29922; --fail:#f85149; --frontier:#58a6ff; --skip:#8b949e; --accent:#bc8cff;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font:13px/1.45 "Segoe UI", system-ui, sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden;}
+  header{border-bottom:1px solid var(--border); padding:10px 14px 8px; background:var(--panel); flex:0 0 auto;}
+  h1{font-size:16px; font-weight:600; letter-spacing:.2px;}
+  h1 span{color:var(--dim); font-weight:400; font-size:12px;}
+  .row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px;}
+  .tabs{display:flex; gap:4px;}
+  .tab{padding:6px 14px; border:1px solid var(--border); border-radius:6px; background:transparent; color:var(--dim); cursor:pointer; font-size:12.5px;}
+  .tab.active{background:#1f6feb33; border-color:#1f6feb; color:var(--text);}
+  #search{background:#0d1117; border:1px solid var(--border); border-radius:6px; color:var(--text); padding:5px 10px; width:230px; font-size:12.5px;}
+  .chip{padding:3px 10px; border-radius:20px; border:1px solid var(--border); cursor:pointer; font-size:11.5px; user-select:none; background:transparent;}
+  .chip.off{opacity:.3;}
+  .chip b{font-weight:600;}
+  #resetView{padding:5px 12px; border:1px solid var(--border); border-radius:6px; background:transparent; color:var(--dim); cursor:pointer; font-size:12px;}
+  #resetView:hover{color:var(--text);}
+  .legend{display:flex; gap:14px; margin-top:6px; font-size:11px; color:var(--dim); flex-wrap:wrap;}
+  .legend i{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px;}
+  main{flex:1; display:flex; min-height:0;}
+  #stage{flex:1; position:relative; overflow:hidden; cursor:grab;}
+  #stage.drag{cursor:grabbing;}
+  svg{width:100%; height:100%; display:block;}
+  aside{width:360px; flex:0 0 360px; border-left:1px solid var(--border); background:var(--panel); overflow-y:auto; padding:14px;}
+  aside h2{font-size:14.5px; margin-bottom:2px;}
+  aside .sub{color:var(--dim); font-size:11px; margin-bottom:8px;}
+  .badge{display:inline-block; padding:2px 9px; border-radius:12px; font-size:11px; color:#0d1117; font-weight:600; margin-bottom:8px;}
+  aside h3{font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--dim); margin:12px 0 4px;}
+  aside p, aside li{font-size:12.5px; color:#c9d1d9;}
+  aside ul{padding-left:16px;}
+  aside li{margin:2px 0;}
+  table{width:100%; border-collapse:collapse; margin:4px 0;}
+  td{border:1px solid var(--border); padding:3px 7px; font-size:12px;}
+  td:first-child{color:var(--dim); width:45%;}
+  .filelink{font-family:Consolas, monospace; font-size:11.5px; color:var(--accent); word-break:break-all;}
+  .placeholder{color:var(--dim); font-size:12.5px; margin-top:20px; text-align:center;}
+  svg text{font-family:"Segoe UI", system-ui, sans-serif;}
+  .node{cursor:pointer;}
+  .node:hover rect.body{stroke-width:2.5;}
+  .dimmed{opacity:.07; pointer-events:none;}
+  .hiddenBySearch{opacity:.1;}
+  .matchHL rect.body{stroke:#fff; stroke-width:2.5;}
+  .edgeLbl{fill:var(--dim); font-size:10.5px;}
+  #hint{position:absolute; bottom:8px; left:12px; color:var(--dim); font-size:11px; pointer-events:none;}
+</style>
+</head>
+<body>
+<header>
+  <h1>ChaoticLLM — интерактивная карта проекта <span>· chaotic-llm · все фазы, 70+ линий экспериментов, PC-фронтир</span></h1>
+  <div class="row">
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="phases">Карта фаз</button>
+      <button class="tab" data-tab="exps">Линии экспериментов</button>
+      <button class="tab" data-tab="mech">Механизм</button>
+    </div>
+    <input id="search" placeholder="Поиск: exp52, PC, retrieval, morin...">
+    <div class="chips row" id="filters" style="gap:6px;"></div>
+    <button id="resetView">Сброс вида</button>
+  </div>
+  <div class="legend" id="legend"></div>
+</header>
+<main>
+  <div id="stage">
+    <svg id="svg"></svg>
+    <div id="hint">колесо — зум · перетаскивание — панорама · клик по узлу — детали</div>
+  </div>
+  <aside id="panel"><div class="placeholder">Кликните узел, чтобы увидеть гипотезу, метрики, вердикт и проблемы.</div></aside>
+</main>
+
+<script>
+"use strict";
+/* ============================== ДАННЫЕ ============================== */
+const STATUS = {
+  ok:      {label:"подтверждено", short:"OK",  color:"#3fb950", icon:"✅"},
+  partial: {label:"частично",     short:"ЧАСТ",color:"#d29922", icon:"⚠️"},
+  fail:    {label:"провал",       short:"ПРОВ",color:"#f85149", icon:"❌"},
+  frontier:{label:"фронтир",      short:"ФРОН",color:"#58a6ff", icon:"🔄"},
+  skip:    {label:"пропущен",     short:"SKIP",color:"#8b949e", icon:"⏭️"},
+  info:    {label:"контроль/факт",short:"ФАКТ",color:"#bc8cff", icon:"ℹ️"}
+};
+
+const PHASES = [
+ {id:"p03", title:"Phase 0–3", sub:"toy-задачи, математика карты",
+  desc:"Математика карты Арнольда: обратимость, периоды, перемешивание, spread, toy-модели (GSF, adaptive depth, error controller), сравнение с attention, ablation. Вердикт фазы: хаос = обратимая перестановка, не лучше random; селективность даёт только контентный readout (0.92 при 9.3× дешевле).",
+  verdict:"Хаос не «вычисляет»; единственный живой компонент — перемешивание + readout."},
+ {id:"p01", title:"Phase 0.1", sub:"контраргументы + синтез v0.2",
+  desc:"Контраргументная фаза: адресуемость, маршрутизация, вычислимость, локальность ошибок, Пуанкаре. Плюс β-приор (morin-filter) как недостающий параметр. Итог: «хаос = дешёвый пропозер, селектор делает выбор». Иерархия окон закрывает long-range. v0.3 — полностью attention-free.",
+  verdict:"Архитектура v0.2/v0.3: Mixer + readout + β-приор ≈ attention в пределах 14% PPL."},
+ {id:"p4", title:"Phase 4", sub:"хаос как routing для sparse attention",
+  desc:"Гипотеза: хаотический микшер дёшево предсказывает малое множество семантически значимых связей для sparse attention. Гейт recall@16 ≥ 50% провален: 11.8%, корреляция с attention ≈ 0 (Spearman 0.044). Контент-независимая динамика не может предсказывать контент-зависимые веса.",
+  verdict:"Sparse routing через хаос закрыт. Микшер остаётся broadcast-пропозером."},
+ {id:"p5", title:"Phase 5", sub:"β-Architecture: compute-memory split",
+  desc:"Инверсия предположения трансформера: память живёт в таблице (масштабируется с КОРПУСОМ), compute — дешёвый и почти без параметров. exp22: memory-scaling подтверждён (PPL 28.3→10.35 при фиксированном микшере). β-law: оптимальный β зависит от домена и качества памяти (0.972 код / 0.5 NL / 0.9 NL+KN).",
+  verdict:"Новая ось масштабирования (таблица) подтверждена; каналы комплементарны."},
+ {id:"it", title:"Iteration", sub:"exp25–36: wall-clock, дешёвая память, β(c_h)",
+  desc:"Векторизованный микшер закрывает wall-clock (2.9× быстрее attention при W=4096). Утилити-гейты и learned β-контроллер блокированы (память слишком дорога для гейта). Пивот exp31: sparse MLE-память — 93% качества KN при 17× меньшей стоимости. exp35/36: confidence-gate β(c_h)=c_h/(c_h+k), один бесплатный параметр, бьёт полный Kneser–Ney на обоих доменах.",
+  verdict:"Architecture v0.7: Mixer + sparse MLE + β(c_h). Сильнейший результат проекта."},
+ {id:"sc", title:"Селекция и масштаб", sub:"exp37–56: генерация, d-скейлинг, Око, память",
+  desc:"Генерация работает end-to-end. Микшер масштабируется 90K→460K (32.8→16.7), на d=512 плато: exp41/41b/42 (оптимизатор, гейты) не помогают; exp45 — контрольный трансформер 8.65 PPL подтверждает архитектурный потолок ~460K. exp52: bidirectional + обучаемая проекция — прорыв (mixer-only 13.04, fused 8.475 — рекорд). Линии «Око» и higher-order памяти закрыты.",
+  verdict:"Память архитектурно-агностична (улучшает и трансформер); compute-канал упирается в потолок без обучаемой комбинации."},
+ {id:"id", title:"Идентичность через хаос", sub:"prior-prop, BLACK-HOLE H1–H3, VQ, night-CRT",
+  desc:"Можно ли пронести точную идентичность токена через хаотический микшер? Протестировано ~10 способов: распространение prior (DP), чистая перестановка (DP-fix), проекторы и наблюдатели горизонта (H1/H2), CRT-наблюдатель (H3 — probe даёт 100% декодирование позиции, но в полной модели путь забивается шумом PPL), VQ-квантование. Все: retrieval = 0. Единственное, что сохраняет точность — внешняя таблица без сжатия в вектор (morin order-3, 10.46).",
+  verdict:"Направление закрыто навсегда: идентичность не пересекает хаос. Транспорт нужен другой."},
+ {id:"pc", title:"Pecora–Carroll", sub:"фронтир: диссипативная синхронизация",
+  desc:"Математическое обоснование: у Арнольда det=1, интервалы сходимости PC по растягивающему (k∈(−0.62,1.38)) и сжимающему (k∈(1.62,3.62)) направлениям НЕ пересекаются — синхронизация невозможна в принципе. Диссипативная карта на торе (k=1.2): sync_err=0.0000, декодирование L=64 — 100%. Первый работающий транспорт идентичности за 7 фаз. Цена: отказ от точной обратимости.",
+  verdict:"PC-микшер: retrieval 0.32–0.40 на всех дистанциях (sts_prog). Узкое место сместилось в ЧТЕНИЕ драйвера (oracle-потолок 23–40%)."}
+];
+
+/* experiments: phase, id, name, status, metric (короткая), hyp, results[[k,v]], verdict, problems[], files[] */
+const EXPERIMENTS = [
+ /* ---- Phase 0–3 ---- */
+ {ph:"p03", id:"exp_00", name:"Reversibility", st:"ok", metric:"err = 0 (N=8..1024)",
+  hyp:"F⁻¹(F(X))=X для карты Арнольда на Z²_N.",
+  results:[["Ошибка обращения","0"],["N","8..1024"]],
+  verdict:"Карта — точная обратимая перестановка.", problems:[], files:["experiments/exp_00_reversibility/"]},
+ {ph:"p03", id:"exp_01", name:"Период T(N)", st:"ok", metric:"T(2^k)=3·2^(k−2), max 3N",
+  hyp:"Каков период орбиты карты на конечном пространстве.",
+  results:[["Средний период","~0.51N"],["Максимум","3N"]],
+  verdict:"Дикая немонотонность; для степеней двойки — замкнутая форма.", problems:[], files:["experiments/exp_01_period/"]},
+ {ph:"p03", id:"exp_02", name:"Mixing: хаос vs перестановки", st:"partial", metric:"перестановка = изометрия",
+  hyp:"Хаос перемешивает лучше случайной/фиксированной перестановки?",
+  results:[["Перестановки","изометрии: L2/Hamming сохраняются"],["Coupling","нестабилен (1.5^t)"]],
+  verdict:"Перестановка НЕ перемешивает значения — обязателен coupling.", problems:["Наивное аддитивное сцепление взрывается"], files:["experiments/exp_02_mixing/"]},
+ {ph:"p03", id:"exp_03", name:"Information spread", st:"partial", metric:"O(log N) при sym-coupling",
+  hyp:"Сколько токенов затрагивает один сигнал.",
+  results:[["Симметричный coupling","O(log N) шагов"],["Arnold vs random/fixed","без разницы"]],
+  verdict:"Распространение = свойство expander-графов, не хаоса.", problems:[], files:["experiments/exp_03_information_spread/"]},
+ {ph:"p03", id:"exp_04", name:"Token communication", st:"partial", metric:"нужен combine",
+  hyp:"Retrieval через хаос.",
+  results:[["Распространение","есть"],["Выбор","нет"]],
+  verdict:"Коммуникация требует combine-операции.", problems:[], files:["experiments/exp_04_token_communication/"]},
+ {ph:"p03", id:"exp_05", name:"Long-range", st:"fail", metric:"acc 0.06–0.5, нестабильно",
+  hyp:"Accuracy(L) для L=2..512.",
+  results:[["FullAttn","1.0 на всех L"],["Хаос","0.06–0.5, разброс между пробами"]],
+  verdict:"Хаос без иерархии не тянет long-range.", problems:["Нестабильность между пробами"], files:["experiments/exp_05_long_range/"]},
+ {ph:"p03", id:"exp_06", name:"GSF-гейты", st:"fail", metric:"0.189 vs 0.190",
+  hyp:"Может ли контроллер направить хаос селективно.",
+  results:[["Ablation −GSF","0.190 ≈ 0.189"]],
+  verdict:"GSF учится как «громкость», не как маршрутизация.", problems:["Не селективен"], files:["experiments/exp_06_gsf/"]},
+ {ph:"p03", id:"exp_07", name:"Adaptive depth", st:"partial", metric:"насыщение есть, критерия нет",
+  hyp:"Остановка по качеству снижает compute.",
+  results:[["Экономия","нет надёжного критерия остановки"]],
+  verdict:"Deep supervision: предсказания не стабилизируются.", problems:["Критерий остановки не найден"], files:["experiments/exp_07_adaptive_depth/"]},
+ {ph:"p03", id:"exp_08", name:"Error controller", st:"fail", metric:"0% экономии",
+  hyp:"Коррекция траектории с ранним выходом.",
+  results:[["Экономия","0%"]],
+  verdict:"Ранний выход не сработал.", problems:[], files:["experiments/exp_08_error_controller/"]},
+ {ph:"p03", id:"exp_09", name:"Обратимость под управлением", st:"fail", metric:"0.36 vs 1e-6",
+  hyp:"Сохраняется ли обратимость при GSF-управлении.",
+  results:[["Без управления","err 1e-6"],["С управлением","err 0.36"]],
+  verdict:"Управление ломает обратимость (нужен кэш гейтов).", problems:[], files:["experiments/exp_09_reversibility_control/"]},
+ {ph:"p03", id:"exp_10", name:"Toy transformer", st:"partial", metric:"Chaotic+AttnRead 0.92 (A)",
+  hyp:"Обучение моделей на задачах A–D.",
+  results:[["Задача A","0.92"],["Задача D +GSF","1.0"]],
+  verdict:"Без селектора — шанс.", problems:[], files:["experiments/exp_10_toy_transformer/"]},
+ {ph:"p03", id:"exp_11", name:"Scaling (toy)", st:"partial", metric:"FLOPs O(N log N) ✓; acc при N>16 — шанс",
+  hyp:"compute(N) и accuracy(N).",
+  results:[["FLOPs","разрыв 90×→212× в пользу хаоса"],["Accuracy","при N≥25 все падают к шансу (фикс. бюджет)"]],
+  verdict:"Уровень 7 (scaling) не достигнут на toy.", problems:["Кривую «качество vs compute» построить не удалось"], files:["experiments/exp_11_scaling/"]},
+ {ph:"p03", id:"exp_12", name:"Attention comparison", st:"ok", metric:"0.92 @ 9.3× дешевле",
+  hyp:"Хаос+readout vs full attention на retrieval.",
+  results:[["ChaoticAttnReadout","0.92 @ 3.66e4 FLOPs"],["FullAttn","1.0 @ 3.40e5 FLOPs"]],
+  verdict:"Единственная победа Phase 0–3: дешёвый селективный readout.", problems:[], files:["experiments/exp_12_attention_comparison/"]},
+ {ph:"p03", id:"exp_13", name:"Ablation", st:"ok", metric:"−coupling: 0.068 = шанс",
+  hyp:"Что реально нужно: перестановка, coupling, GSF, глубина.",
+  results:[["Без coupling","0.068 (шанс)"],["Без перестановки","0.180"],["GSF","0 эффект"],["Глубина 3/6/10","слабо влияет"]],
+  verdict:"Решающие компоненты: coupling + селектор.", problems:[], files:["experiments/exp_13_ablation/"]},
+ /* ---- Phase 0.1 ---- */
+ {ph:"p01", id:"exp01", name:"Addressable iteration", st:"ok", metric:"адресация O(log t)",
+  hyp:"Замкнутая форма A^t через числа Фибоначчи.",
+  results:[["Адресация","O(log t)"],["Выразимость AND","нет (линейность)"]],
+  verdict:"Адресовать можно, вычислять — нет.", problems:["AND не выразим"], files:["phase01/exp01_addressable_iteration.py"]},
+ {ph:"p01", id:"exp02", name:"Chaotic router", st:"fail", metric:"орбита = 0.75/N",
+  hyp:"Может ли хаос маршрутизировать.",
+  results:[["Покрытие пространства","0.75/N"]],
+  verdict:"Маршрутизация из динамики невозможна.", problems:[], files:["phase01/exp02_chaotic_router.py"]},
+ {ph:"p01", id:"exp03", name:"Computation", st:"fail", metric:"readout(A^t x)=readout(x)",
+  hyp:"Вычисляет ли хаос.",
+  results:[["Readout по орбите","инвариантен"]],
+  verdict:"Хаос не вычисляет.", problems:[], files:["phase01/exp03_computation.py"]},
+ {ph:"p01", id:"exp04_05", name:"Error locality", st:"fail", metric:"семантической локальности нет",
+  hyp:"Локальны ли ошибки хаоса семантически.",
+  results:[["Локальность","отсутствует"]],
+  verdict:"Ошибка разрушает несвязанные токены.", problems:[], files:["phase01/exp04_05_error_locality.py"]},
+ {ph:"p01", id:"exp06", name:"Recurrence equivalence", st:"partial", metric:"одна карта = O(N) орбит",
+  hyp:"Хаос = RNN/hash?",
+  results:[["Эквивалентность","частичная"]],
+  verdict:"Одна карта — ограниченный класс перестановок.", problems:[], files:["phase01/exp06_recurrence_equivalence.py"]},
+ {ph:"p01", id:"exp07", name:"Poincare recurrence", st:"ok", metric:"точный возврат через T(N)",
+  hyp:"Возвращение Пуанкаре на конечном пространстве.",
+  results:[["Возврат","точный, за T(N)"]],
+  verdict:"Фантомы Пуанкаре объясняют шансовую точность чистого хаоса.", problems:[], files:["phase01/exp07_poincare_recurrence.py"]},
+ {ph:"p01", id:"exp08", name:"Phantom filter (β-приор)", st:"ok", metric:"β — недостающий параметр",
+  hyp:"Корпусная статистика отсеивает «фантомные» переходы (идея morin-filter).",
+  results:[["Эффект","+58% на реальных данных"]],
+  verdict:"β-приор — недостающий селектор.", problems:[], files:["phase01/exp08_phantom_filter.py"]},
+ {ph:"p01", id:"exp09", name:"Chaotic LM (char)", st:"ok", metric:"PPL 4.94 / 60.3%",
+  hyp:"Char-LM на реальном коде с β-приором.",
+  results:[["PPL","4.94"],["top-1","60.3% (2.3 п.п. от attention)"]],
+  verdict:"Хаос+β почти догоняет attention.", problems:[], files:["phase01/exp09_chaotic_lm.py"]},
+ {ph:"p01", id:"exp10", name:"Hierarchical LM", st:"ok", metric:"PPL 42.9 → 8.96 (4.79×)",
+  hyp:"Иерархия окон (8×64 + реле) для long-range.",
+  results:[["Контекст 64→256","4.79×"],["top-1","+15.6 п.п."]],
+  verdict:"Иерархия закрывает long-range за O(W log W).", problems:[], files:["phase01/exp10_hierarchical_lm.py"]},
+ {ph:"p01", id:"exp11", name:"BPE scaling", st:"ok", metric:"паритет 15% PPL держится",
+  hyp:"Паритет хаос/attention на BPE-512 при равном бюджете.",
+  results:[["PPL","25.5 vs 22.2 (15%)"]],
+  verdict:"Разрыв стабилен при масштабировании словаря.", problems:[], files:["phase01/exp11_bpe_scaling.py"]},
+ {ph:"p01", id:"exp12", name:"Full architecture", st:"ok", metric:"13.5 PPL / 41.4%",
+  hyp:"Хаос + β-приор (β=0.3).",
+  results:[["PPL","13.5 (attention: 11.9)"],["top-1","41.4%"]],
+  verdict:"Разрыв с attention закрыт до 14% PPL / 1.0 п.п.", problems:[], files:["phase01/exp12_full_architecture.py"]},
+ {ph:"p01", id:"exp13", name:"Two selectors", st:"ok", metric:"23.7 vs 25.7 у трансформера",
+  hyp:"+ attention-readout поверх микшера и β.",
+  results:[["PPL @12K шагов","23.7 (AttnLM: 25.7)"],["top-1+β","41.4%"]],
+  verdict:"Лучший результат сравнения на равном бюджете.", problems:[], files:["phase01/exp13_two_selectors.py"]},
+ {ph:"p01", id:"exp14", name:"Multilayer", st:"fail", metric:"L2≈L1, L4 хуже",
+  hyp:"Кумулятивный эффект глубины.",
+  results:[["L=1,2,4","нет выигрыша"]],
+  verdict:"У блоков нет весов — глубина не помогает (нужны пер-слойные проекции → реализовано в exp52).", problems:["Нет весов на слой"], files:["phase01/exp14_multilayer.py"]},
+ {ph:"p01", id:"exp15", name:"Learnable β", st:"ok", metric:"β=0.972 → PPL 11.24 / 43.0%",
+  hyp:"β как обучаемый параметр.",
+  results:[["β","0.972 — модель почти полностью доверяет памяти"],["PPL","11.24"],["top-1","43.0% (attention: 42.4%)"]],
+  verdict:"Модель сама находит β-Architecture.", problems:["Контекстный β дивергирует — нужен clamp"], files:["phase01/exp15_learnable_beta.py"]},
+ {ph:"p01", id:"exp16", name:"GPU latency", st:"fail", metric:"wall-clock 76–225× медленнее",
+  hyp:"Честный wall-clock при W=512..2048 на RTX 3060.",
+  results:[["Wall-clock","76–225× медленнее (Python-циклы vs cuBLAS)"]],
+  verdict:"Выигрыш хаоса по FLOPs не проявляется во времени без fused-ядер.", problems:["Закрыто в exp25 векторизацией"], files:["phase01/exp16_latency.py"]},
+ {ph:"p01", id:"exp17", name:"kNN-LM vs β", st:"ok", metric:"β-приор 1.84× лучше kNN",
+  hyp:"Сравнение при равной памяти.",
+  results:[["β-приор vs kNN-LM","1.84×"],["Даже при 20× памяти kNN","β всё равно лучше"]],
+  verdict:"Дешёвая таблица бьёт миллиардный индекс.", problems:[], files:["phase01/exp17_knn_lm.py"]},
+ /* ---- Phase 4 ---- */
+ {ph:"p4", id:"exp19", name:"Chaotic Top-K attention", st:"fail", metric:"PPL 33.07 vs 22.4",
+  hyp:"Sparse attention поверх хаотических кандидатов.",
+  results:[["PPL","33.07 (full: 22.4)"],["Interactions","6.25%"]],
+  verdict:"Кандидаты не захватывают attention-структуру.", problems:["Recall@16 = 11.8%"], files:["phase01/exp19_chaotic_topk.py"]},
+ {ph:"p4", id:"exp20", name:"Gumbel top-K retrieval", st:"fail", metric:"recall@K = 0.25",
+  hyp:"Селекция из динамики с обучаемой дискретной выборкой.",
+  results:[["Recall@K","0.25"]],
+  verdict:"Контент-независимая динамика не селектирует.", problems:[], files:["phase01/exp20_gumbel_topk_retrieval.py"]},
+ {ph:"p4", id:"exp21", name:"Candidate recall (ГЕЙТ)", st:"fail", metric:"recall@16 = 11.8% при пороге 50%",
+  hyp:"Хаотический генератор кандидатов пересекается с важным для attention.",
+  results:[["Recall@16","11.8% (random: 6.3%)"],["Spearman/Pearson","0.044 / 0.062"],["Top-1 match","1.3%"]],
+  verdict:"Гейт провален в 4.2×; PATH A закрыт. Причина: attention учителя локальна (дист. 20–40), хаос глобален (69–122).",
+  problems:["Корреляция ≈ 0 — контент-зависимость не возникает из контент-независимой динамики"], files:["phase01/exp21_candidate_recall.py"]},
+ /* ---- Phase 5 ---- */
+ {ph:"p5", id:"exp22", name:"Memory-scaling", st:"ok", metric:"PPL 28.3 → 10.35 при фикс. микшере",
+  hyp:"Точность растёт с ТАБЛИЦЕЙ при фиксированном крошечном compute.",
+  results:[["order-1 (0.23MB)","28.34 / 23.2%"],["order-3 full (3.54MB)","10.35 / 52.4%"],["Против трансформера","11.9 / 42.4%"]],
+  verdict:"Корпус — ось масштабирования, независимая от параметров. compute = покрытие, memory = точность.", problems:[], files:["phase01/exp22_memory_scaling.py"]},
+ {ph:"p5", id:"exp23", name:"β-law на NL", st:"ok", metric:"код β=0.972 / NL β=0.5",
+  hyp:"β-Архитектура не специфична для кода; β адаптируется к домену.",
+  results:[["NL fused","28.53 (mixer alone: 62.4)"],["top-1 gain","+18.6 п.п."],["Порядок на NL","order-2 > order-3 (разреженность raw MLE)"]],
+  verdict:"β-law подтверждена: обучение β-гейта обязательно.", problems:["Raw MLE деградирует на порядке ≥3 на NL"], files:["phase01/exp23_nl_beta.py"]},
+ {ph:"p5", id:"exp24", name:"Kneser-Ney память", st:"ok", metric:"KN order-4: PPL 20.4 / 34.1%",
+  hyp:"Сглаживание чинит высшие порядки на NL.",
+  results:[["order-4 (14.6MB)","22.5→20.4 при β=0.9"],["β на NL с хорошей памятью","0.9 (было 0.5)"]],
+  verdict:"β отслеживает КАЧЕСТВО памяти, не домен.", problems:["KN order-1/2 деградируют (continuation unigram плоский)"], files:["phase01/exp24_kneser_ney.py"]},
+ /* ---- Iteration ---- */
+ {ph:"it", id:"exp25", name:"Vectorized mixer", st:"ok", metric:"2.9× быстрее attention при W=4096",
+  hyp:"Векторизованная реализация закрывает wall-clock (exp16).",
+  results:[["W=4096","7.4 ms vs 21.1 ms (attention)"],["Ускорение против циклов","40–60×"]],
+  verdict:"O(W log W) реален во wall-clock.", problems:[], files:["phase01/exp25_latency_fused.py"]},
+ {ph:"it", id:"exp26", name:"Hash-таблица памяти", st:"ok", metric:"0 расхождений с dict; BPE-2048: 20.18",
+  hyp:"Probing hash table (KenLM-style) точна и масштабируется.",
+  results:[["Расхождения","0"],["BPE-2048 + hash-KN","PPL 20.18 / 40.7% @ 8.9MB"]],
+  verdict:"Канал памяти масштабируется на большие словари без потерь.", problems:[], files:["phase01/exp26_hash_table_vocab.py","phase01/exp26b_hash_mle.py"]},
+ {ph:"it", id:"exp27", name:"Генерация v0.7", st:"ok", metric:"связный код, β=0.9",
+  hyp:"Архитектура как генеративная модель, не только PPL-скorer.",
+  results:[["Код","try/catch, imports, JSX, типы"],["β=0","деградация в повторы"]],
+  verdict:"Первый генеративный демо β-Архитектуры.", problems:["NL генерация слаба (модель 90K мала)"], files:["phase01/exp27_generation.py"]},
+ {ph:"it", id:"exp28", name:"Learned β-контроллер", st:"fail", metric:"AUC 0.6, коллапс к β≈1",
+  hyp:"MLP на фичах микшера выучит per-token роутинг.",
+  results:[["PPL oracle","8.28 (потолок есть!)"],["Learned","коллапс к β≈1"]],
+  verdict:"БЛОКИРОВАН: роутинг зависит от y (неизвестно на инференсе); контекстных фич недостаточно.", problems:["Oracle-потолок большой, но недостижим контекстными фичами"], files:["phase01/exp28_beta_controller.py"]},
+ {ph:"it", id:"exp29", name:"Memory cutoff", st:"fail", metric:"max safe skip 5%",
+  hyp:"Дешёвые фичи предскажут полезность памяти до lookup.",
+  results:[["ΔPPL ≤ 0.25","skip ≤ 5%"],["ΔL распределение","бимодально: 0.5% токенов с ΔL≈0"]],
+  verdict:"БЛОКИРОВАН: «почти бесполезной» памяти не существует на этом корпусе.", problems:[], files:["phase01/exp29_memory_cutoff.py"]},
+ {ph:"it", id:"exp30", name:"Utility-гейты", st:"fail", metric:"0.96× — net loss",
+  hyp:"Физический skip + предиктор = реальное ускорение.",
+  results:[["Гейт","1.19 µs (0.9% KN)"],["KN стоимость","132.6 µs"],["Итог","гейт медленнее always-on"]],
+  verdict:"БЛОКИРОВАН: корень — память слишком дорога для гейта. Решение — сделать память дешёвой (exp31).", problems:[], files:["phase01/exp30_utility_gate.py","phase01/exp30_part2_gates.py"]},
+ {ph:"it", id:"exp31", name:"Sparse MLE (ПИВОТ)", st:"ok", metric:"93% KN при 17× дешевле (7.7 µs)",
+  hyp:"Дешёвая ассоциативная память: распределение только по НАБЛЮДАЕМЫМ продолжениям.",
+  results:[["exact top-1","25.59 / 33% KN"],["sparse MLE","11.66 / 93%"],["KN full","10.94 / 100% @ 130.8 µs"]],
+  verdict:"Память безусловно дешева — дилемма гейта исчезает.", problems:[], files:["phase01/exp31_exact_match_memory.py"]},
+ {ph:"it", id:"exp33", name:"Hierarchical backoff", st:"fail", metric:"7× стоимости за 2.3 PPL",
+  hyp:"Иерархический backoff закроет разрыв с KN.",
+  results:[["Стоимость/выгода","не оправдана"]],
+  verdict:"CLEARED: разрыв закрыт иначе (β(c_h)).", problems:[], files:["phase01/exp33_sparse_backoff.py"]},
+ {ph:"it", id:"exp34", name:"Joint training", st:"fail", metric:"mixer-only 4888 vs 62.7",
+  hyp:"Совместное обучение с fused loss.",
+  results:[["Mixer после joint","разрушен"]],
+  verdict:"CLEARED: микшер должен оставаться standalone.", problems:["Fused loss ломает микшер"], files:["phase01/exp34_joint_training.py"]},
+ {ph:"it", id:"exp35", name:"Confidence β(c_h)", st:"ok", metric:"1 бесплатный параметр",
+  hyp:"β = c_h/(c_h+k) — доверие по частоте контекста.",
+  results:[["Параметров","1 (k)"],["Сигнал","уже в lookup, бесплатно"]],
+  verdict:"Захватывает то, что exp28/exp30 пытались предсказать.", problems:[], files:["phase01/exp35_confidence_beta.py"]},
+ {ph:"it", id:"exp36", name:"β(c_h) на коде", st:"ok", metric:"код 8.59 vs KN 10.94",
+  hyp:"β(c_h) sparse память против полного Kneser-Ney.",
+  results:[["Код","8.59 vs 10.94"],["NL (WikiText-2)","18.85 vs 23.21"],["Стоимость","9–17× дешевле"]],
+  verdict:"Бьёт полный KN на обоих доменах безусловно. Сильнейший результат итерации.", problems:[], files:["phase01/exp36_code_betach.py"]},
+ /* ---- Селекция и масштаб ---- */
+ {ph:"sc", id:"exp37", name:"Generation v0.7 (авторегрессия)", st:"ok", metric:"структурный код, temp 0.8/top-p 0.9",
+  hyp:"β(c_h) держится в авторегрессивной выборке.",
+  results:[["avg β","~1.0 (контексты в train-распределении)"],["Дрейф/коллапс","нет"]],
+  verdict:"End-to-end генерация работает.", problems:["β насыщен — выгода на редких контекстах невидима"], files:["phase01/exp37_generation_v07.py"]},
+ {ph:"sc", id:"exp38", name:"BPE-2048 β(c_h)", st:"partial", metric:"первый прогон — баг; исправлен в exp39",
+  hyp:"β(c_h)+sparse MLE при V=2048.",
+  results:[["Первый вердикт","«KN лучше» — ОШИБКА (баг: штраф log(1−β) на unseen)"]],
+  verdict:"Исправлено в exp39: β(c_h) бьёт KN и при V=2048.", problems:["Баг эвалюации пойман — пример культуры проверки"], files:["phase01/exp38_vocab2048_betach.py"]},
+ {ph:"sc", id:"exp39", name:"Unigram floor + фикс", st:"ok", metric:"V=512: 8.59; V=2048: 16.55 (обе бьют KN)",
+  hyp:"Пол ε·p_uni на unseen — нужен ли?",
+  results:[["Пол","вредит (8.59→12.29; 16.55→21.46)"],["Правило","память без массы → микшер один"],["k оптимальный","масштабируется: 0.5 → 5.0"]],
+  verdict:"Архитектура v0.7 бьёт KN на обоих словарях.", problems:[], files:["phase01/exp39_unigram_floor.py"]},
+ {ph:"sc", id:"exp40", name:"Larger mixer d=256", st:"ok", metric:"mixer-only 16.73 (было 32.78)",
+  hyp:"Масштабирование микшера 4×.",
+  results:[["mixer-only","32.78 → 16.73"],["fused","8.70 (стабильно)"],["vs KN","8.70 vs 10.29"]],
+  verdict:"Compute-канал масштабируется (на этой ширине).", problems:[], files:["phase01/exp40_larger_mixer.py"]},
+ {ph:"sc", id:"exp41", name:"Scaling d=512 (1.2M)", st:"fail", metric:"loss 4.65 — плато с шага 2000",
+  hyp:"Масштабирование 460K → 1.2M.",
+  results:[["mixer-only","87.72 (ХУЖЕ 90K-модели)"],["fused","8.95 (маскирует провал)"]],
+  verdict:"Модель не сошлась; инконклюзивно по потолку архитектуры. fused-число читать нельзя.", problems:["Гипотезы: lr/schedule; затухание через 24 фикс. перестановки; data ratio 1.2 парам/токен"], files:["phase01/exp41_scaling_1M.py"]},
+ {ph:"sc", id:"exp41b", name:"Rerun diagnostics", st:"fail", metric:"loss 4.15 — плато остаётся",
+  hyp:"lr=5e-4 + warmup + 16K шагов + grad-логирование.",
+  results:[["Loss @14K","4.15 (плато сохраняется)"]],
+  verdict:"Оптимизатор не лечит потолок.", problems:[], files:["phase01/exp41b_rerun_diagnostics.py"]},
+ {ph:"sc", id:"exp42", name:"Vector gates", st:"fail", metric:"PPL 159.3 vs 121.3 (scalar)",
+  hyp:"d-мерные гейты на блок снимут потолок ширины.",
+  results:[["Тренд","хуже скалярных на каждом шаге после 8K"]],
+  verdict:"H3 ОТВЕРГНУТ: потолок глубже представления гейтов.", problems:[], files:["phase01/exp42_vector_gates.py"]},
+ {ph:"sc", id:"exp45", name:"Transformer control", st:"info", metric:"8.65 / +β(c_h) 7.97",
+  hyp:"Контроль: стандартный трансформер 1.35M на том же протоколе.",
+  results:[["Transformer","loss 1.82 / PPL 8.65"],["Mixer","loss 4.01 / PPL 97.4"],["+sparse β(c_h) на трансформере","7.97"]],
+  verdict:"Гипотеза C подтверждена: потолок микшера ~460K АРХИТЕКТУРНЫЙ (не данные, не оптимизатор). Память β(c_h) архитектурно-агностична — улучшает и трансформер.", problems:["Микшер без обучаемой комбинации не переносит ёмкость в ширину"], files:["phase01/exp45_transformer_baseline.py"]},
+ {ph:"sc", id:"exp50", name:"Dual mixer («шестерёнки»)", st:"fail", metric:"133.5 (scalar: 97.4)",
+  hyp:"Два микшера с фиксированными interleave-перестановками.",
+  results:[["mixer-only d=512","133.5"]],
+  verdict:"Необучаемые перестановки дают mixing-ёмкость, но не обучаемую.", problems:[], files:["phase01/exp50_dual_mixer.py"]},
+ {ph:"sc", id:"exp51", name:"Triple mixer", st:"skip", metric:"пропущен",
+  hyp:"Тот же механизм, что exp50.",
+  results:[["Статус","заведомо отрицательный — не запускался"]],
+  verdict:"Пропущен по аналогии.", problems:[], files:["phase01/exp51_triple_mixer.py"]},
+ {ph:"sc", id:"exp52", name:"Bidirectional + проекция", st:"ok", metric:"mixer-only 13.04 · fused 8.475 (рекорд)",
+  hyp:"fwd+bwd микшеры + обучаемая Linear(2d→d) комбинация направлений.",
+  results:[["mixer-only d=512","13.04 (scalar: 97.4, в 7.5× лучше)"],["fused","8.475 — рекорд проекта"],["Трансформер","8.65 / 7.97"]],
+  verdict:"ПРОРЫВ: потолок d=512 был не в хаосе, а в отсутствии обучаемой комбинации. Микшер впервые масштабируется.", problems:[], files:["phase01/exp52_bidirectional.py"]},
+ {ph:"sc", id:"eye_failsafe", name:"Око fail-safe (E0–E2)", st:"partial", metric:"E1-l: 30.2 (+14% vs 43.8)",
+  hyp:"Око = селектор маршрутов микшера (конституция fail-safe И1–И4).",
+  results:[["E1-l learned","30.2 (−14%)"],["E1-r random","32.1 (−9%) — большая часть выигрыша от ансамбля"],["E2-l learned grouping","хуже random"]],
+  verdict:"Селекция живёт на модуляторе, но НЕ выделяет KEY. Закрыто как retrieval-модуль.", problems:["Random почти догоняет learned (~4% PPL от обучения)"], files:["phase01/exp_eye_failsafe/"]},
+ {ph:"sc", id:"eye_selector", name:"Око selector", st:"fail", metric:"закрыто",
+  hyp:"Развитие линии Ока как селектора.",
+  results:[["Итог","закрыто вместе с fail-safe линией"]],
+  verdict:"Контекст-зависимая маршрутизация ≠ retrieval.", problems:[], files:["phase01/exp_eye_selector/","phase01/exp56_parallel_eye.py"]},
+ {ph:"sc", id:"mem_selector", name:"Higher-order память (MEM)", st:"fail", metric:"order-8: 35.5 vs order-3: 10.46",
+  hyp:"Higher-order / content-addressable память улучшит order-3.",
+  results:[["MEM-A order-8","35.5 (q_miss 0.82)"],["MEM-B content-addr","30.0 (9.0MB)"],["MEM-C hybrid","9.98 (+4.7%, шум)"],["Noise-тест MEM-B","acc = 0"]],
+  verdict:"Разреженность 512^8 убивает coverage. order-3 β-prior — оптимум. Микшер+память комплементарны (62.1 / 40.9 / 10.5).", problems:["Content-addr память не находит KEY в шуме"], files:["phase01/exp_memory_selector/"]},
+ {ph:"sc", id:"morin_boost", name:"Morin-буст (TrustScorer/NoteBook)", st:"partial", metric:"LLM: PPL 2.78 → 2.695 / 77%",
+  hyp:"Улучшение prior: обучаемый TrustScorer, статический NoteBook, интеграция.",
+  results:[["morin базово","LLM 3.64 → 2.78"],["NoteBook","2.695 / 77.0%"],["TrustScorer","−29% на стенде, ~morin на LLM (400 сэмплов мало)"],["Интеграция","≈ лучший компонент (механизмы конкурируют)"]],
+  verdict:"Практичный результат (NoteBook), синергии нет. Фундаментально: prior не масштабируется с параметрами (order-8: 35.5).", problems:["Разреженность higher-order остаётся открытой"], files:["phase01/exp_morin_boost/","morin-filter/"]},
+ /* ---- Идентичность ---- */
+ {ph:"id", id:"dp", name:"Prior-PROP (DP)", st:"fail", metric:"42.97 · retrieval 0/0/0/0",
+  hyp:"Распространение prior-эмбеддингов через микшер на дальние дистанции.",
+  results:[["DP","42.97"],["C-cap (ёмкость)","41.26 — всё улучшение от параметров"],["DP-rand","46.25"],["Retrieval","0 даже без шума"]],
+  verdict:"Q1–Q5 все НЕТ. Направление закрыто навсегда по стоп-правилу.", problems:["Propagation ВРЕДИТ (42.97 vs 36.34 static)"], files:["phase01/exp_prior_prop/"]},
+ {ph:"id", id:"dp_fix", name:"DP-fix (чистая перестановка)", st:"fail", metric:"46.97 — хуже DP",
+  hyp:"Coupling размывал prior; чистая перестановка сохранит теги.",
+  results:[["DP-fix","46.97 (хуже ёмкости на 5.7)"],["Retrieval","0/0/0/0"]],
+  verdict:"«Теги мертвы»: перестановка без mixing делает prior случайным свидетелем.", problems:["Лестница идентичности: static 36.34 < DP 42.97 < DP-fix 46.97 << morin 10.46"], files:["phase01/exp_prior_prop/"]},
+ {ph:"id", id:"bh_h1", name:"BLACK-HOLE H1 (проектор)", st:"fail", metric:"40.52 · retrieval 0",
+  hyp:"Микшер обратим → информация есть, проблема в декодировании (mean). Обучаемый проектор вытащит.",
+  results:[["PPL","40.52 (−1.8% vs C-cap)"],["Retrieval","0"]],
+  verdict:"Хаос = чувствительность к нач. условиям: идентичность НЕ сохраняется на практике, несмотря на формальную обратимость.", problems:[], files:["phase01/exp_prior_prop/"]},
+ {ph:"id", id:"bh_h2", name:"BLACK-HOLE H2 (наблюдатель до горизонта)", st:"fail", metric:"47.77 · retrieval 0",
+  hyp:"Наблюдатель записывает ВХОД до микшера («мать узнаёт ребёнка»).",
+  results:[["PPL","47.77 (хуже всех)"],["Retrieval","0"]],
+  verdict:"Softmax-пул усредняет позицию — «теорема без волос» до дыры.", problems:[], files:["phase01/exp_prior_prop/"]},
+ {ph:"id", id:"bh_h3", name:"BLACK-HOLE H3 (CRT-наблюдатель)", st:"fail", metric:"69.40 · retrieval 0 (probe: 100%)",
+  hyp:"CRT-остатки по простым 3/5/7/11 кодируют позиции без сжатия.",
+  results:[["crt_probe","позиция восстанавливается на 100% на ЛЮБОЙ L (mean: 0.3%)"],["Полная модель","69.40, retrieval 0"],["H3-FIX (бакеты отдельно)","позиция 100%, но Linear-сжатие в модели губит"]],
+  verdict:"Проба выигрывает, модель нет: CRT-путь «забивается» шумом оптимизации PPL.", problems:["Сжатие Linear(1664→128) обратно в вектор"], files:["phase01/exp_prior_prop/","phase01/night_crt.py"]},
+ {ph:"id", id:"vq", name:"exp_vq (этап A: VQ)", st:"fail", metric:"mixer 53–57 vs 40.43 · retrieval 0",
+  hyp:"VQ-квантование защитит адресность до входа в блендер.",
+  results:[["Codebook","жив (68–74%, без коллапса)"],["Mixer PPL","+30% (дискретизация теряет информацию)"],["VQ-KTO/aux","retrieval = 0 везде"]],
+  verdict:"ПРОВАЛ: точный путь снова игнорируется. Этап B (PC) триггерится по ТЗ §4.", problems:["Квантование защищает адресность ценой непрерывной информации"], files:["phase01/exp_vq/"]},
+ {ph:"id", id:"night_crt", name:"Night 500M CRT", st:"partial", metric:"PPL 211.7 · недообучен (3.4% эпохи)",
+  hyp:"«Fat model» 973M параметров с CRT на 3060.",
+  results:[["Токенов","32.8M из 973M"],["Loss","5.0–5.6 (не сошёлся)"],["1 эпоха","~237K шагов"]],
+  verdict:"Инконклюзивно: не опровержение гипотезы, недомощный прогон.", problems:["Кластер-бюджет не позволяет 1 эпоху"], files:["phase01/night_crt.py","phase01/night_crt.json"]},
+ /* ---- PC ---- */
+ {ph:"pc", id:"pc_probe", name:"PC-probe (проба)", st:"ok", metric:"sync_err = 0.0000 · декод L=64: 100%",
+  hyp:"Замена Арнольда синхронизацией Пекоры–Кэрролла (идея архитектора).",
+  results:[["Арнольд (det=1)","sync 0.49–0.66 — НЕВОЗМОЖНА (пустое пересечение k)"],["Hénon","NaN (несовместим со стартом)"],["Диссипативный тор k=1.2","sync 0.0000; L=16: 47%, L=64: 100%, L=128: 34%"]],
+  verdict:"ПЕРВЫЙ СИГНАЛ за 7 фаз. Ключ: Арнольд→PC = консервативная→диссипативная динамика. Транспорт решён, селекция — внешняя (CRT-адрес O(W)).", problems:["Точность нестабильна по L; toy-проба на скалярах"], files:["phase01/exp_vq/pc_probe.py","phase01/exp_vq/pc_probe2.py","phase01/exp_vq/pc_probe3.py","phase01/exp_vq/PC_PROBE_REPORT.md"]},
+ {ph:"pc", id:"pc_mixer", name:"PC-MIXER (models_pc.py)", st:"frontier", metric:"gated 8.618 · retrieval 0.32–0.40 на всех L",
+  hyp:"Чистый PC-микшер: БЕЗ Arnold/permute/coupling — диссипативная карта + PC-sync; селекция драйвера на СЫРЫХ эмбеддингах (sts_prog: multi-query, top-8 соседей, прогрессивное уточнение query).",
+  results:[["results_pc.json (sts_prog, 900K)","mixer 23.95 · gated 8.618"],["Retrieval L=16/64/128/256","0.396 / 0.314 / 0.321 / 0.317 (равномерно, без decay)"],["Последний коммит (mean-драйвер)","mixer 44.04 · gated 9.74 · retrieval 0.015–0.030"]],
+  verdict:"Первый ненулевой retrieval на ВСЕХ дистанциях в серии; gated на уровне рекорда проекта (8.475). Локальный результат существенно сильнее опубликованного в коммите.", problems:["Retrieval ~35% всё ещё далеко от 92% у ChaoticAttnReadout; перенос идентичности слабый (1.5–3%) в mean-режиме"], files:["phase01/exp_vq/models_pc.py","phase01/exp_vq/experiment_pc.py","phase01/exp_vq/results_pc.json"]},
+ {ph:"pc", id:"lk_probe", name:"Link-Keeper probe", st:"fail", metric:"LK ≈ sts_emb (≤3%, шум)",
+  hyp:"«Архив ссылок» (M=128) внутри окна улучшит селекцию драйвера.",
+  results:[["LK vs sts_emb","разница ≤3%"],["Oracle-драйвер (идеальный)","23–40% — ГЛАВНОЕ ОТКРЫТИЕ"]],
+  verdict:"Направление «адресный архив» закрыто. Узкое место — НЕ поиск, а ЧТЕНИЕ: readout3+PC-sync не извлекают B из драйвера.", problems:["Oracle-потолок 23–40% задаёт фронтир всей PC-линии"], files:["phase01/exp_vq/link_keeper_probe.py","phase01/exp_vq/LINK_KEEPER_PROBE.md"]}
+];
+
+/* ============================== МЕХАНИЗМ ============================== */
+const MECH_NODES = [
+ {id:"in",   x:60,  y:180, w:170, h:74, st:"info", title:"Input BPE-токены", sub:"корпус → ByteLevel BPE-512/2048",
+  desc:"Окно W=256 (4×64 локальных + глобальное реле) или W=4096 (векторизованная версия)."},
+ {id:"emb",  x:280, y:180, w:180, h:74, st:"ok", title:"Embedding + Position", sub:"~460K параметров при V=512 d=128",
+  desc:"Сырые эмбеддинги критичны: в PC-линии селекция драйвера идёт именно на них, чтобы «идентичность была жива»."},
+ {id:"mix",  x:520, y:120, w:230, h:96, st:"ok", title:"Bidirectional Chaotic Mixer", sub:"fwd+bwd Arnold permute+coupling · Linear(2d→d) · O(W·d)",
+  desc:"Прорыв exp52: обучаемая комбинация направлений сняла потолок d=512 (mixer-only 97.4 → 13.04). ~12 параметров на блок + проекция. Перестановки кэшируются.",
+  warn:"Потолок ширины ~460K без обучаемой комбинации (exp45). На d=512 без неё — 97.4 PPL vs 8.65 у трансформера."},
+ {id:"pcmix",x:520, y:250, w:230, h:96, st:"frontier", title:"PC-блок (фронтир)", sub:"h += tanh(h@W+b)·0.3; h += k·(driver−h) · диссипативный",
+  desc:"Чистая замена Арнольда (models_pc.py): нет permute_indices, нет even/odd coupling. PC-синхронизация переносит идентичность драйвера. sync_err=0 при k=1.2.",
+  warn:"Цена: отказ от точной обратимости (диссипация вместо консервативной динамики)."},
+ {id:"sel",  x:810, y:250, w:210, h:96, st:"frontier", title:"Селекция драйвера (sts_prog)", sub:"query на СЫРЫХ ключах · top-8 · прогрессивное уточнение",
+  desc:"Multi-query из последних 4 токенов; cos-sim по сырым эмбеддингам; соседи (sel+1) как драйвер; query уточняется после каждого блока.",
+  warn:"УЗКОЕ МЕСТО ЛИНИИ: даже ИДЕАЛЬНЫЙ (oracle) драйвер даёт лишь 23–40% retrieval — чтение, не поиск (LK-probe)."},
+ {id:"ro",   x:810, y:120, w:210, h:96, st:"ok", title:"Local Readout", sub:"h_last + gmean → MLP → O(d)",
+  desc:"exp18: attention-readout удалён без потери качества (32.83 vs 32.47). Ни одного QKV-матмула и softmax в модели."},
+ {id:"beta", x:1080,y:180, w:230, h:96, st:"ok", title:"β(c_h) микстура + память", sub:"β=c_h/(c_h+k) · sparse MLE order-3 · 7.7 µs/token",
+  desc:"ЯДРО КАЧЕСТВА: sparse MLE (только наблюдаемые продолжения, ~5 hash-lookups) + confidence-гейт. Бьёт полный Kneser–Ney на обоих доменах и обоих словарях. Память масштабируется с КОРПУСОМ.",
+  warn:"При V=512 память маскирует вклад compute-канала — честная метрика микшера только fused − контроль β=0."},
+ {id:"out",  x:1370,y:180, w:150, h:74, st:"ok", title:"Logits", sub:"авторегрессия",
+  desc:"Генерация работает end-to-end (exp27/37): структурный код, temp 0.8 / top-p 0.9."}
+];
+const MECH_EDGES = [
+ ["in","emb"],["emb","mix"],["emb","pcmix"],["mix","ro"],["pcmix","sel"],["ro","beta"],["sel","beta"],["beta","out"]
+];
+const CLOSED_PATHS = [
+ {x:520, y:420, w:230, title:"Prior-PROP / DP-fix", note:"retrieval 0 везде · propagation вредит"},
+ {x:520, y:505, w:230, title:"BLACK-HOLE H1/H2", note:"проектор/наблюдатель: identity теряется"},
+ {x:810, y:420, w:210, title:"CRT в модели (H3)", note:"probe 100%, но модель путь забивает шумом PPL"},
+ {x:810, y:505, w:210, title:"VQ-квантование", note:"mixer +30% PPL, retrieval 0"},
+ {x:1080,y:420, w:230, title:"Якорный запрос (exp18 V2)", note:"впрыск в динамику разрушает состояние"},
+ {x:1080,y:505, w:230, title:"Learned β-контроллер / utility-гейты", note:"AUC 0.6 · skip 5% · 0.96× net loss"},
+ {x:1370,y:420, w:200, title:"Higher-order / content-addr память", note:"разреженность 512^8 · order-3 оптимум"},
+ {x:1370,y:505, w:200, title:"Vector gates (exp42)", note:"159.3 vs 121.3 — хуже скалярных"}
+];
+
+/* ============================== РЕНДЕР ============================== */
+const svg = document.getElementById("svg");
+const NS = "http://www.w3.org/2000/svg";
+let view = {x:0, y:0, w:2400, h:1350};
+let curTab = "phases";
+let nodesIndex = {};  // id -> {el, data, cx, cy}
+let filters = new Set(Object.keys(STATUS));
+let searchText = "";
+
+function el(tag, attrs, parent){
+  const e = document.createElementNS(NS, tag);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  if(parent) parent.appendChild(e);
+  return e;
+}
+function txt(x, y, s, attrs, parent){
+  const t = el("text", Object.assign({x:x, y:y}, attrs||{}), parent);
+  t.textContent = s;
+  return t;
+}
+function applyView(){ svg.setAttribute("viewBox", view.x+" "+view.y+" "+view.w+" "+view.h); }
+
+function roundedRect(g, x, y, w, h, r, fill, stroke){
+  return el("rect", {class:"body", x:x, y:y, width:w, height:h, rx:r, ry:r, fill:fill, stroke:stroke, "stroke-width":1.4}, g);
+}
+
+/* ---- построение узла эксперимента/фазы ---- */
+function makeNode(g, x, y, w, h, data, kind){
+  const st = STATUS[data.st] || STATUS.info;
+  const grp = el("g", {class:"node"}, g);
+  roundedRect(grp, x, y, w, h, 9, "#161b22", st.color);
+  el("rect", {x:x, y:y, width:5, height:h, rx:2.5, fill:st.color}, grp);
+  const fs = kind==="phase" ? 15 : 12.5;
+  const title = txt(x+13, y+ (kind==="phase"?30:26), data.title !== undefined ? data.title : data.name, {fill:"#e6edf3","font-size":fs,"font-weight":"600"}, grp);
+  // обрезка длинных заголовков
+  if(title.getComputedTextLength && title.getComputedTextLength() > w-22){
+    let s = title.textContent;
+    while(s.length > 4 && title.getComputedTextLength() > w-22){ s = s.slice(0,-2); title.textContent = s+"…"; }
+  }
+  if(kind==="phase"){
+    txt(x+13, y+50, data.sub, {fill:"#8b949e","font-size":11.5}, grp);
+    const counts = countStatuses(data.id);
+    txt(x+13, y+74, counts, {fill:st.color,"font-size":11.5,"font-weight":"600"}, grp);
+    txt(x+13, y+92, "клик — сводка фазы", {fill:"#8b949e","font-size":10}, grp);
+  } else {
+    // metric — переносы до 2 строк
+    const m = data.metric || "";
+    const lines = wrapText(m, w-24, 11);
+    lines.slice(0,2).forEach((ln,i)=> txt(x+13, y+45+i*15, ln, {fill:st.color,"font-size":11,"font-weight":"500"}, grp));
+    txt(x+13, y+h-12, st.icon+" "+st.label, {fill:"#8b949e","font-size":10.5}, grp);
+  }
+  grp.addEventListener("click", (ev)=>{ ev.stopPropagation(); showPanel(data, kind); });
+  return grp;
+}
+function wrapText(s, maxPx, fontPx){
+  const c = document.createElement("canvas").getContext("2d");
+  c.font = "500 "+fontPx+"px 'Segoe UI', sans-serif";
+  const words = s.split(" ");
+  const lines = []; let line = "";
+  for(const wd of words){
+    const test = line ? line+" "+wd : wd;
+    if(c.measureText(test).width > maxPx && line){ lines.push(line); line = wd; }
+    else line = test;
+  }
+  if(line) lines.push(line);
+  return lines;
+}
+function countStatuses(ph){
+  const es = EXPERIMENTS.filter(e=>e.ph===ph);
+  const c = {ok:0, partial:0, fail:0, frontier:0, skip:0, info:0};
+  es.forEach(e=>{ c[e.st] = (c[e.st]||0)+1; });
+  return "✅"+c.ok+"  ⚠️"+c.partial+"  ❌"+c.fail+(c.frontier?"  🔄"+c.frontier:"");
+}
+
+/* ---- вкладка 1: фазы ---- */
+function drawPhases(){
+  clearSvg();
+  const g = el("g", {}, svg);
+  const w=262, h=108, gap=34, x0=50, y0=120;
+  PHASES.forEach((p,i)=>{
+    const x = x0 + i*(w+gap);
+    const node = makeNode(g, x, y0, w, h, Object.assign({}, p, {st:phaseStatus(p.id)}), "phase");
+    nodesIndex["phase_"+p.id] = {el:node, data:p, kind:"phase"};
+    if(i<PHASES.length-1){
+      const x1=x+w, x2=x+w+gap, ym=y0+h/2;
+      el("line",{x1:x1+4,y1:ym,x2:x2-8,y2:ym,stroke:"#58a6ff","stroke-width":1.6,"marker-end":"url(#arrow)"},g);
+      const lbl = PHASE_TRANSITIONS[i];
+      if(lbl) txt(x1+gap/2, ym-8, lbl, {class:"edgeLbl","text-anchor":"middle"}, g);
+    }
+  });
+  // аннотация-выноска
+  const bx=50, by=300, bw=2260;
+  el("rect",{x:bx,y:by,width:bw,height:150,rx:10,fill:"#161b22",stroke:"#30363d"},g);
+  txt(bx+20, by+30, "Главная драма проекта", {fill:"#e6edf3","font-size":14,"font-weight":"600"}, g);
+  const lines = [
+    "① Хаос не вычисляет и не маршрутизирует — это дешёвый broadcast-пропозер (Phase 0–4: recall@16 = 11.8%, корреляция с attention ≈ 0).",
+    "② Качество несёт канал ПАМЯТИ: sparse MLE + β(c_h)=c_h/(c_h+k) бьёт полный Kneser–Ney на обоих доменах при 9–17× меньшей стоимости (exp31/36).",
+    "③ Память архитектурно-агностична: улучшает и трансформер (8.65 → 7.97, exp45). Compute-канал без обучаемой комбинации упирается в потолок ~460K.",
+    "④ Точную идентичность нельзя пронести через хаос НИКАК (10 конфигураций, retrieval = 0 везде) → замена Арнольда на Pecora–Carroll (диссипативная синхронизация).",
+    "⑤ PC-фронтир: retrieval 0.32–0.40 на всех дистанциях — первый сигнал за 7 фаз; узкое место сместилось из ПОИСКА в ЧТЕНИЕ драйвера (oracle-потолок 23–40%)."
+  ];
+  lines.forEach((s,i)=> txt(bx+20, by+58+i*19, s, {fill:"#c9d1d9","font-size":12.2}, g));
+}
+const PHASE_TRANSITIONS = [
+ "хаос ≠ вычислитель",
+ "роутинг провален 11.8%",
+ "качество даёт память",
+ "гейты блокированы → дешёвая память",
+ "потолок 460K → bidirectional",
+ "identity не проходит хаос",
+ "Арнольд → PC (диссипация)"
+];
+function phaseStatus(ph){
+  const es = EXPERIMENTS.filter(e=>e.ph===ph);
+  if(es.some(e=>e.st==="frontier")) return "frontier";
+  if(es.some(e=>e.st==="ok")) return "ok";
+  return "fail";
+}
+
+/* ---- вкладка 2: эксперименты ---- */
+function drawExps(){
+  clearSvg();
+  const g = el("g", {}, svg);
+  let y = 40;
+  const nodeW=226, nodeH=86, gapX=16, gapY=18, perRow=9, x0=50;
+  PHASES.forEach(p=>{
+    const es = EXPERIMENTS.filter(e=>e.ph===p.id);
+    if(!es.length) return;
+    // заголовок фазы
+    txt(x0, y, p.title+" — "+p.sub, {fill:"#e6edf3","font-size":16,"font-weight":"600"}, g);
+    const pw = 8*(nodeW+gapX);
+    el("line",{x1:x0,y1:y+10,x2:x0+pw,y2:y+10,stroke:"#30363d","stroke-width":1},g);
+    y += 34;
+    es.forEach((e,i)=>{
+      const row = Math.floor(i/perRow), col = i%perRow;
+      const x = x0 + col*(nodeW+gapX);
+      const node = makeNode(g, x, y+row*(nodeH+gapY), nodeW, nodeH, e, "exp");
+      nodesIndex["exp_"+e.id] = {el:node, data:e, kind:"exp"};
+    });
+    const rows = Math.ceil(es.length/perRow);
+    y += rows*(nodeH+gapY) + 30;
+  });
+  view = {x:0, y:0, w:2280, h:Math.min(1400, y+80)};
+  applyView();
+}
+
+/* ---- вкладка 3: механизм ---- */
+function drawMech(){
+  clearSvg();
+  const g = el("g", {}, svg);
+  const idx = {};
+  MECH_NODES.forEach(n=>{
+    const grp = el("g", {class:"node"}, g);
+    const st = STATUS[n.st];
+    roundedRect(grp, n.x, n.y, n.w, n.h, 9, "#161b22", st.color);
+    el("rect",{x:n.x,y:n.y,width:5,height:n.h,rx:2.5,fill:st.color},grp);
+    const t1 = txt(n.x+13, n.y+27, n.title, {fill:"#e6edf3","font-size":13.5,"font-weight":"600"}, grp);
+    if(t1.getComputedTextLength && t1.getComputedTextLength() > n.w-22){
+      let s=t1.textContent; while(s.length>4 && t1.getComputedTextLength() > n.w-22){ s=s.slice(0,-2); t1.textContent=s+"…"; }
+    }
+    wrapText(n.sub, n.w-24, 10.5).slice(0,2).forEach((ln,i)=> txt(n.x+13, n.y+45+i*14, ln, {fill:st.color,"font-size":10.5}, grp));
+    txt(n.x+13, n.y+n.h-10, st.icon, {"font-size":12}, grp);
+    grp.addEventListener("click", (ev)=>{ ev.stopPropagation(); showMechPanel(n); });
+    idx[n.id] = {x:n.x, y:n.y, w:n.w, h:n.h};
+  });
+  MECH_EDGES.forEach(([a,b])=>{
+    const A=idx[a], B=idx[b];
+    let x1,y1,x2,y2;
+    if(A.y === B.y || Math.abs(A.y-B.y)<40){ // горизонтально
+      y1 = A.y + A.h/2; y2 = B.y + B.h/2;
+      x1 = (A.x < B.x) ? A.x+A.w : A.x;
+      x2 = (A.x < B.x) ? B.x-6 : B.x+B.w+6;
+    } else { // вертикально-диагонально
+      x1 = A.x + A.w/2 + (B.x>A.x? A.w*0.3 : -A.w*0.3);
+      y1 = A.y + A.h; x2 = B.x + B.w/2; y2 = B.y - 6;
+      el("line",{x1:x1,y1:y1,x2:x2,y2:y2,stroke:"#8b949e","stroke-width":1.4,"marker-end":"url(#arrow)","stroke-dasharray":"none",opacity:.75},g);
+      return;
+    }
+    el("line",{x1:x1,y1:y1,x2:x2,y2:y2,stroke:"#8b949e","stroke-width":1.4,"marker-end":"url(#arrow)",opacity:.75},g);
+  });
+  // красная зона закрытых путей
+  txt(50, 395, "ЗАКРЫТЫЕ ПУТИ (retrieval = 0 / провал по стоп-правилу)", {fill:"#f85149","font-size":13.5,"font-weight":"600"}, g);
+  el("line",{x1:50,y1:403,x2:2200,y2:403,stroke:"#f85149","stroke-width":0.6,opacity:.5,"stroke-dasharray":"6 5"},g);
+  CLOSED_PATHS.forEach(cp=>{
+    const grp = el("g", {class:"node", opacity:.85}, g);
+    el("rect",{class:"body",x:cp.x,y:cp.y,width:cp.w,height:70,rx:9,fill:"#1a1114",stroke:"#f85149","stroke-width":1,"stroke-dasharray":"5 4"},grp);
+    const t = txt(cp.x+12, cp.y+26, cp.title, {fill:"#f85149","font-size":12,"font-weight":"600"}, grp);
+    if(t.getComputedTextLength && t.getComputedTextLength() > cp.w-20){
+      let s=t.textContent; while(s.length>4 && t.getComputedTextLength() > cp.w-20){ s=s.slice(0,-2); t.textContent=s+"…"; }
+    }
+    wrapText(cp.note, cp.w-22, 10).slice(0,2).forEach((ln,i)=> txt(cp.x+12, cp.y+44+i*13, ln, {fill:"#c9d1d9","font-size":10}, grp));
+    grp.addEventListener("click", (ev)=>{ ev.stopPropagation(); showClosedPanel(cp); });
+  });
+  // пунктир от микшера к зоне закрытых путей
+  el("line",{x1:635,y1:216,x2:635,y2:412,stroke:"#f85149","stroke-width":1,"stroke-dasharray":"4 5",opacity:.5,"marker-end":"url(#arrowRed)"},g);
+  view = {x:0, y:60, w:1700, h:950};
+  applyView();
+}
+function showClosedPanel(cp){
+  document.getElementById("panel").innerHTML =
+    "<h2>"+cp.title+"</h2><div class='sub'>закрытая линия</div>"+
+    "<span class='badge' style='background:#f85149'>❌ провал</span>"+
+    "<h3>Почему не сработало</h3><p>"+cp.note+"</p>"+
+    "<h3>Общий вывод серии</h3><p>Точную идентичность нельзя ни пронести через микшер, ни прочитать из него, ни подсмотреть до него. Единственное, что сохраняет точность — внешняя таблица без сжатия в вектор (morin order-3: PPL 10.46).</p>";
+}
+
+/* ---- панель деталей ---- */
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function showPanel(data, kind){
+  const p = document.getElementById("panel");
+  if(kind==="phase"){
+    const es = EXPERIMENTS.filter(e=>e.ph===data.id);
+    let html = "<h2>"+esc(data.title)+"</h2><div class='sub'>"+esc(data.sub)+"</div>";
+    html += "<span class='badge' style='background:"+(STATUS[phaseStatus(data.id)].color)+"'>"+STATUS[phaseStatus(data.id)].icon+" фаза: "+STATUS[phaseStatus(data.id)].label+"</span>";
+    html += "<p>"+esc(data.desc)+"</p><h3>Вердикт</h3><p>"+esc(data.verdict)+"</p>";
+    html += "<h3>Эксперименты ("+es.length+")</h3><ul>";
+    es.forEach(e=>{ html += "<li><b>"+esc(e.id)+"</b> "+esc(e.name)+" — "+STATUS[e.st].icon+" "+esc(e.metric)+"</li>"; });
+    html += "</ul>";
+    p.innerHTML = html; return;
+  }
+  const st = STATUS[data.st];
+  let html = "<h2>"+esc(data.id)+" · "+esc(data.name)+"</h2>";
+  html += "<span class='badge' style='background:"+st.color+"'>"+st.icon+" "+st.label+"</span>";
+  html += "<h3>Гипотеза</h3><p>"+esc(data.hyp)+"</p>";
+  if(data.results && data.results.length){
+    html += "<h3>Результаты</h3><table>";
+    data.results.forEach(r=>{ html += "<tr><td>"+esc(r[0])+"</td><td>"+esc(r[1])+"</td></tr>"; });
+    html += "</table>";
+  }
+  html += "<h3>Вердикт</h3><p>"+esc(data.verdict)+"</p>";
+  if(data.problems && data.problems.length){
+    html += "<h3>Проблемы / failure modes</h3><ul>";
+    data.problems.forEach(pr=>{ html += "<li>"+esc(pr)+"</li>"; });
+    html += "</ul>";
+  }
+  if(data.files && data.files.length){
+    html += "<h3>Файлы</h3>";
+    data.files.forEach(f=>{ html += "<div class='filelink'>chaotic-llm/"+esc(f)+"</div>"; });
+  }
+  p.innerHTML = html;
+}
+function showMechPanel(n){
+  const st = STATUS[n.st];
+  let html = "<h2>"+esc(n.title)+"</h2><div class='sub'>узел механизма</div>";
+  html += "<span class='badge' style='background:"+st.color+"'>"+st.icon+" "+st.label+"</span>";
+  html += "<p>"+esc(n.desc)+"</p>";
+  if(n.warn){ html += "<h3>⚠ Проблема / узкое место</h3><p style='color:#f0b72f'>"+esc(n.warn)+"</p>"; }
+  const panel = document.getElementById("panel"); panel.innerHTML = html;
+}
+
+/* ---- утилиты ---- */
+function clearSvg(){
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  nodesIndex = {};
+  const defs = el("defs", {}, svg);
+  const mk = (id,color)=>{ const m = el("marker",{id:id,viewBox:"0 0 10 10",refX:9,refY:5,markerWidth:7,markerHeight:7,orient:"auto-start-reverse"},defs); el("path",{d:"M0,0 L10,5 L0,10 z",fill:color},m); };
+  mk("arrow","#8b949e"); mk("arrowBlue","#58a6ff"); mk("arrowRed","#f85149");
+}
+
+/* ---- пан/зум ---- */
+const stage = document.getElementById("stage");
+let dragging=false, dsx=0, dsy=0, dvx=0, dvy=0;
+stage.addEventListener("mousedown", e=>{ dragging=true; stage.classList.add("drag"); dsx=e.clientX; dsy=e.clientY; dvx=view.x; dvy=view.y; });
+window.addEventListener("mouseup", ()=>{ dragging=false; stage.classList.remove("drag"); });
+window.addEventListener("mousemove", e=>{
+  if(!dragging) return;
+  const rect = svg.getBoundingClientRect();
+  view.x = dvx - (e.clientX-dsx)*view.w/rect.width;
+  view.y = dvy - (e.clientY-dsy)*view.h/rect.height;
+  applyView();
+});
+stage.addEventListener("wheel", e=>{
+  e.preventDefault();
+  const rect = svg.getBoundingClientRect();
+  const mx = view.x + (e.clientX-rect.left)*view.w/rect.width;
+  const my = view.y + (e.clientY-rect.top)*view.h/rect.height;
+  const f = e.deltaY>0 ? 1.12 : 1/1.12;
+  const nw = Math.min(6000, Math.max(300, view.w*f));
+  const k = nw/view.w;
+  view.x = mx - (mx-view.x)*k; view.y = my - (my-view.y)*k; view.w = nw; view.h = view.h*k;
+  applyView();
+}, {passive:false});
+document.getElementById("resetView").addEventListener("click", ()=>{
+  if(curTab==="phases"){ view={x:0,y:0,w:2400,h:1350}; }
+  else if(curTab==="exps"){ drawExps(); return; }
+  else { view={x:0,y:60,w:1700,h:950}; }
+  applyView();
+});
+
+/* ---- фильтры и поиск ---- */
+function buildFilters(){
+  const box = document.getElementById("filters");
+  box.innerHTML = "";
+  Object.entries(STATUS).forEach(([k,s])=>{
+    const n = totalOf(k);
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.style.borderColor = s.color;
+    chip.innerHTML = "<b style='color:"+s.color+"'>"+s.icon+" "+s.label+"</b> · "+n;
+    if(!filters.has(k)) chip.classList.add("off");
+    chip.addEventListener("click", ()=>{
+      if(filters.has(k)) filters.delete(k); else filters.add(k);
+      chip.classList.toggle("off");
+      applyFilters();
+    });
+    box.appendChild(chip);
+  });
+}
+function totalOf(k){ return EXPERIMENTS.filter(e=>e.st===k).length; }
+function applyFilters(){
+  for(const key in nodesIndex){
+    const item = nodesIndex[key];
+    const d = item.data;
+    const st = (key.startsWith("phase_")) ? phaseStatus(d.id) : (d.st || "info");
+    const vis = filters.has(st);
+    item.el.classList.toggle("dimmed", !vis);
+  }
+  applySearch();
+}
+document.getElementById("search").addEventListener("input", e=>{
+  searchText = e.target.value.trim().toLowerCase();
+  applySearch();
+});
+function applySearch(){
+  for(const key in nodesIndex){
+    const item = nodesIndex[key];
+    item.el.classList.remove("matchHL","hiddenBySearch");
+    if(searchText.length < 2) continue;
+    const d = item.data;
+    const hay = (key+" "+(d.name||d.title||"")+" "+(d.metric||"")+" "+(d.hyp||"")+" "+(d.verdict||"")+" "+(d.sub||"")).toLowerCase();
+    if(hay.includes(searchText)) item.el.classList.add("matchHL");
+    else item.el.classList.add("hiddenBySearch");
+  }
+}
+
+/* ---- табы ---- */
+document.querySelectorAll(".tab").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    b.classList.add("active");
+    curTab = b.dataset.tab;
+    searchText = ""; document.getElementById("search").value = "";
+    if(curTab==="phases"){ drawPhases(); view={x:0,y:0,w:2400,h:1350}; }
+    else if(curTab==="exps"){ drawExps(); }
+    else { drawMech(); }
+    applyFilters();
+  });
+});
+
+/* ---- легенда ---- */
+(function(){
+  const lg = document.getElementById("legend");
+  lg.innerHTML = "Статусы линий: " + Object.values(STATUS).map(s=>"<span><i style='background:"+s.color+"'></i>"+s.icon+" "+s.label+"</span>").join(" · ");
+})();
+
+/* ---- init ---- */
+drawPhases();
+buildFilters();
+</script>
+</body>
+</html>

@@ -27,3 +27,6 @@ phase01/corpus5m_test.txt
 # Downloaded Stack corpus (2GB, rebuildable)
 phase01/corpus_stack_train.txt
 phase01/corpus_stack_test.txt
+
+# Chat corpus (58MB, rebuildable from train_chat.py) — do not commit
+phase01/exp_vq/ru_chat.json
