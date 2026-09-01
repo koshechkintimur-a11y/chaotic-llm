@@ -1,17 +1,58 @@
-# ChaoticLLM — Controlled Reversible Chaotic Dynamics as an LLM Architecture
+# ChaoticLLM → STS-Prog: история поиска альтернативы attention
 
-Исследовательский проект: можно ли использовать **обратимую хаотическую динамику**
-(карта кота Арнольда, $A = \begin{pmatrix}1&1\\1&2\end{pmatrix}$ на $\mathbb{Z}_N^2$)
-как вычислительный механизм для языковой модели — вместо части pairwise attention?
+**Репозиторий:** экспериментальный поиск быстрой и экономичной архитектуры LLM,
+альтернативной классическому transformer с attention.
 
-> **Главный вопрос:** Can controlled reversible chaotic dynamics replace part of
-> pairwise attention? И если да — какова реальная вычислительная сложность?
+## Краткая история (от чего к чему пришли)
 
-**Краткий ответ:** условно да — но не как «хаос вычисляет», а как
-**«дешёвый пропозер-перемешиватель + внешний селектор»**. Полная архитектура
-(иерархический хаос-миксер + attention-readout + β-корпусный приор) на реальном
-коде даёт PPL 11.24 / top-1 43.0% при ~30× более дешёвом перемешивании, чем
-attention. Ограничения зафиксированы честно (см. Failure modes).
+### Phase 0–3: Хаос как вычислитель (Arnold cat map)
+**Вопрос:** Может ли обратимая хаотическая динамика (карта кота Арнольда)
+заменить часть pairwise attention?
+
+**Ответ:** НЕТ (70+ экспериментов, все провалились).
+- Arnold-карта — точная обратимая перестановка позиций, **но не перемешивает значения**
+- Для коммуникации токенов нужен coupling, но он **уничтожает адресность/идентичность**
+- Попытки «протащить идентичность через хаос» (PRIOR-PROP, BLACK-HOLE, КТО-селекторы,
+  VQ, Link Keeper) — все провалились
+- **Единственное работающее** — внешний exact prior (order-3, gated PPL ~9.5)
+
+**Файлы:** `phase01/exp_01`–`exp_56`, `FINAL_REPORT.md`, `FINAL_REPORT_v2.md`
+**Статус:** ❌ ЗАКРЫТО — Arnold не работает как замена attention
+
+### Phase 4: Пекоры–Кэрролл (PC-синхронизация)
+**Инсайт:** Для переноса идентичности через хаос нужна **диссипативная** динамика
+(консервативная Arnold-карта не может синхронизироваться — det=1, нет устойчивого
+многообразия).
+
+**Результаты:**
+- PC-синхронизация: sync_err=0, decode 100% на L=64 (впервые!)
+- Чистый PC-микшер: mixer PPL 35.41 (vs Arnold 40.43, −12%)
+- **Но:** retrieval всё ещё слабый (1-3%), селекция не работает
+
+**Файлы:** `phase01/exp_vq/pc_probe*.py`, `PC_PROBE_REPORT.md`
+**Статус:** ⚠️ Транспорт работает, селекция — нет
+
+### Phase 5: STS-Prog (Sparse Temporal Selection with Progressive refinement)
+**Прорыв:** Замена хаотической селекции на **content-addressable retrieval по сырым
+эмбеддингам** + PC-синхронизация как усилитель retrieval.
+
+**Ключевые открытия:**
+- `sts_emb` (select на сырых эмбеддингах): mixer 25.23, retrieval 24-38%
+- `sts_prog` (прогрессивное уточнение): mixer 19.22, **retrieval 47/40/35/35**
+- `sts_prog_nopc` (без хаоса): mixer 23.99 — уже бьёт трансформер
+
+**Head-to-head vs Transformer (одинаковый протокол, 8 слоёв):**
+
+| Метрика | STS-Prog | Transformer | Разница |
+|---|---|---|---|
+| Mixer PPL | **19.22** | 24.40 | **−21%** |
+| Retrieval L=16 | **47%** | 18% | **×2.6** |
+| Retrieval L=256 | **35%** | 19% | **+84%** |
+| Сложность | O(W·d·L) | O(W²·L) | дешевле |
+
+**Файлы:** `phase01/exp_vq/models_pc.py`, `experiment_pc.py`, `match_transformer.py`
+**Подробнее:** `phase01/exp_vq/README.md`
+**Статус:** ✅ ПРОРЫВ — дешёвая альтернатива attention, работающая быстрее и точнее
 
 ---
 
@@ -19,157 +60,82 @@ attention. Ограничения зафиксированы честно (см.
 
 ```
 chaotic-llm/
-├── README.md                  ← этот файл
-├── FINAL_REPORT.md            ← Phase 0–3: математика карты, toy-трансформер, ablations
-├── chaos_lib.py               ← общая библиотека: карта Арнольда, метрики, FLOPs
-├── chaotic_torch.py           ← PyTorch-модели (ChaoticMixer, GRU, Local/Full Attn, MLP)
-├── toy_data.py                ← задачи A–D (associative recall, long-range, retrieval)
-├── train_models.py            ← обучение всех моделей на задачах A–D
-├── phase2.py                  ← GSF, adaptive depth, error controller, reversibility
-├── phase3.py                  ← scaling, attention comparison, ablation
+├── README.md                              ← этот файл
+├── .gitignore
 │
-├── experiments/               ← Phase 0–3 (exp_00 … exp_13)
-│   └── exp_XX/  README.md + results.json + plots/
+├── phase01/                               ← все эксперименты
+│   ├── exp_01…exp_56/                     ← Phase 0–3: Arnold, хаос, старые гипотезы
+│   │   ├── experiment.py
+│   │   └── results.json
+│   ├── exp_vq/                            ← Phase 4–5: PC + STS-Prog (ПРОРЫВ)
+│   │   ├── README.md                      ← подробное описание победителя
+│   │   ├── models_pc.py                   ← архитектура PurePCLM + STS-Prog
+│   │   ├── experiment_pc.py               ← протокол обучения + aux loss
+│   │   ├── match_transformer.py           ← честный матч vs transformer
+│   │   ├── pc_probe*.py                   ← пробы PC-синхронизации
+│   │   ├── diagnose_las*.py               ← диагностика селекции
+│   │   ├── link_keeper_probe.py           ← проба Link Keeper (FAIL)
+│   │   ├── night_sts_prog.py              ← ночной прогон на Stack
+│   │   ├── night_transformer.py           ← ночной матч трансформера
+│   │   ├── chat_sts_prog.py               ← инференс/генерация
+│   │   ├── results_*.json                 ← все результаты
+│   │   └── night_ckpt_*.pt                ← чекпоинты
+│   │
+│   ├── corpus_train.txt                   ← малый корпус (487K токенов)
+│   ├── corpus_stack_train.txt             ← Stack (2GB, 973M токенов) — только для ночных прогонов
+│   ├── parametric_models.py               ← TransformerLM, вспомогательные модели
+│   ├── chaos_lib.py                       ← библиотека хаотических карт
+│   └── FINAL_REPORT.md                    ← отчёт Phase 0–3 (исторический)
 │
-└── phase01/                   ← контраргументная фаза + синтез (exp01 … exp17)
-    ├── FINAL_REPORT.md        ← Phase 0.1: ответ на главный вопрос (C — EQUIVALENT)
-    ├── FINAL_REPORT_v2.md     ← финальный синтез: архитектура v0.2
-    ├── build_corpus.py        ← сбор корпуса из локальных проектов (НЕ коммитится)
-    ├── expXX_*.py             ← каждый эксперимент: полный скрипт
-    └── expXX_*/  README.md + results.json
+├── experiments/                           ← Phase 0–3 toy-эксперименты (исторические)
+│
+├── FINAL_REPORT.md                        ← исторический
+├── interactive_map.html                   ← визуализация (историческая)
+└── [старые файлы: chaos_lib.py, phase2.py, …] — исторические, см. Phase 0–3
 ```
 
-> ⚠️ **corpus_train.txt / corpus_test.txt в git не попадают** — они построены из
-> приватных проектов (`Desktop/03_Проекты`). Воспроизводимость: `python build_corpus.py`.
-
 ---
 
-## Две фазы исследования
+## Как воспроизвести победу
 
-### Phase 0–3 (`experiments/`) — игрушечные задачи, обучение
-
-| Эксперимент | Вопрос | Вердикт |
-|---|---|---|
-| exp_00 reversibility | $F^{-1}(F(X))=X$ для N=8..1024 | ✅ обратимость |
-| exp_01 period | период T(N) карты | ✅ T(2^k)=3·2^{k-2}, дикая немонотонность |
-| exp_02 mixing | хаос vs случайная/фикс. перестановка vs линейная | ✅ хаос — хороший перемешиватель |
-| exp_03 information spread | сколько токенов затронуто | ⚠️ чистая пермутация НЕ распространяет сигнал |
-| exp_04 token communication | retrieval через хаос | ⚠️ нужен combine |
-| exp_05 long_range | accuracy(L), L=2..512 | ❌ хаос без иерархии не тянет long-range |
-| exp_06 GSF | может ли контроллер направить хаос | ❌ GSF не даёт селективность |
-| exp_07 adaptive depth | остановка по качеству | ✅ снижает compute |
-| exp_08 error controller | коррекция траектории | ⚠️ работает, но дорого |
-| exp_09 reversibility under control | сохраняется ли обратимость | ❌ управление ломает (0.36 vs 1e-6) |
-| exp_10 toy transformer | обучение на задачах A–D | ⚠️ шанс без селектора |
-| exp_11 scaling | compute(N), accuracy(N) | ⚠️ |
-| exp_12 attention comparison | хаос vs attention на retrieval | ✅ ChaoticAttnReadout 0.92 при 9.3× дешевле |
-| exp_13 ablation | убрать компоненты | ✅ перестановка без сцепления = шанс; GSF = 0 |
-
-**Ключевые находки Phase 0–3:**
-- Карта Арнольда — **обратимая пермутация**, она НЕ смешивает значения.
-  Для коммуникации токенов обязательно сцепление (coupling).
-- GSF-гейты — не селективны (0.189 vs 0.190).
-- **Победа**: ChaoticAttnReadout 91.5% на retrieval при 3.66e4 FLOPs против
-  3.40e5 у FullAttn (в ~9.3× дешевле).
-
-### Phase 0.1 (`phase01/`) — контраргументы + синтез
-
-| Эксперимент | Вопрос | Вердикт |
-|---|---|---|
-| exp01 addressable iteration | замкнутая форма A^t через Фибоначчи | ✅ адресация O(log t); AND не выразим |
-| exp02 chaotic router | может ли хаос маршрутизировать | ❌ орбита = 0.75/N пространства |
-| exp03 computation | вычисляет ли хаос | ❌ readout(A^t x) = readout(x) |
-| exp04_05 error locality | локальность ошибок | ❌ семантической локальности нет |
-| exp06 recurrence equivalence | хаос = RNN/hash | ⚠️ одна карта = O(N) орбит |
-| exp07 poincare recurrence | возвращение Пуанкаре | ✅ точный возврат через T(N) |
-| exp08 phantom filter | β-приор из morin-filter | ✅ **β — недостающий параметр** |
-| exp09 chaotic LM | char-LM на реальном коде | ✅ хаос+β: PPL 4.94, 60.3% (2.3 п.п. от attention) |
-| exp10 hierarchical LM | иерархия для long-range | ✅ PPL 42.9 → 8.96 (4.79×) при контексте 64→256 |
-| exp11 BPE scaling | BPE-уровень, равный бюджет | ✅ паритет 15% PPL держится |
-| exp12 full architecture | хаос + β-приор | ✅ 13.5 PPL / 41.4% (14% от attention) |
-| exp13 two selectors | + attention-readout | ✅ **PPL 23.7 vs 25.7 у трансформера** (12K шагов) |
-| exp14 multilayer | глубина L=1,2,4 | ❌ нет кумулятивного выигрыша (нет весов на слой) |
-| exp15 learnable beta | β как параметр | ✅ **β=0.972 → PPL 11.24 / 43.0%** |
-| exp16 GPU latency | W=512..2048 на RTX 3060 | ❌ wall-clock 76-225× медленнее (Python vs cuBLAS) |
-| exp17 kNN-LM vs β | равная память | ✅ **β-приор в 1.84× лучше kNN** при равной памяти |
-
----
-
-## Итоговая архитектура v0.2
-
-```
-Input (BPE-токены)
-  → Embedding + Position
-  → Hierarchical Chaotic Mixer (1 слой):
-      локальные окна 64: 8×(permute_Arnold + coupling)      [O(W log W)]
-      глобальное реле 4: 4×(permute_Arnold + coupling)
-  → Attention Readout (запрос по всем W, контентная селекция) [O(W·d)]
-  → Gate: β-микстура с корпусным приором (β = 0.972)          [O(1)]
-  → Logits
-```
-
-**Рабочая гипотеза (подтверждена на реальном коде, BPE-512):**
-- **Хаос = дешёвый пропозер** (обратимое перемешивание O(W log W), не обучаемое,
-  ~12 параметров на блок).
-- **Селектор = приор/readout** (корпусная статистика + контентная селекция).
-- Вместе ≈ attention в пределах ~14% PPL при ~30× дешевле перемешивании.
-
-**Лучшие результаты:**
-
-| Метрика | Значение | Против |
-|---|---|---|
-| PPL (BPE-512, код) | **11.24** (хаос + β=0.972) | attention: 11.9–22.4 |
-| top-1 | **43.0%** | attention: 42.4% |
-| Retrieval (Phase 3) | 0.92 accuracy | 9.3× дешевле attention |
-| Long-range | PPL 4.79× лучше при контексте 64→256 | иерархия |
-| Перемешивание | O(W log W) vs O(W²) | ~30× (по FLOPs) |
-
----
-
-## Failure modes (зафиксированы честно)
-
-1. **Чистый хаос без селектора = шанс.** Пермутация не создаёт информацию.
-2. **GSF-гейты не селективны** — только глобальные коэффициенты.
-3. **Управление ломает обратимость** (exp09): 0.36 vs 1e-6.
-4. **Глубина не помогает** (exp14): у хаос-блоков нет весов, L2≈L1, L4 хуже.
-   Нужны пер-слойные проекции.
-5. **GPU wall-clock** (exp16): attention (fused cuBLAS) в 76–225× быстрее при
-   W ≤ 2048. Выигрыш хаоса проявится при W > 100K или с fused CUDA-ядрами.
-6. **Контекстный β дивергирует** (exp15B) — нужен clamp.
-
----
-
-## Воспроизводимость
-
-**Зависимости:** `pip install torch numpy matplotlib tokenizers`
-
-**Корпус:** соберите из своих проектов:
 ```bash
-python phase01/build_corpus.py   # читает Desktop/03_Проекты, пишет corpus_train/test.txt
+cd phase01/exp_vq
+
+# 1. Базовая модель sts_prog (900K, малый корпус)
+python experiment_pc.py pc --driver sts_prog --k 1.2 --sync-steps 8 --layers 8 --d 192 --aux-w 0.5 --aux-mode multibead
+
+# 2. Матч vs трансформер (8 слоёв, выровненный протокол)
+python match_transformer.py
+
+# 3. Ночной прогон на Stack (100M токенов, 3.5M модель)
+python night_sts_prog.py --d 384 --layers 12 --steps 20000 --sub 100000000 --batch 32
+
+# 4. Инференс (генерация текста)
+python chat_sts_prog.py --prompt "def fibonacci(n):" --steps 80 --temp 0.8
 ```
-
-**Запуск отдельных экспериментов:**
-```bash
-# Phase 0–3
-python experiments/exp_02_mixing/experiment.py
-python train_models.py --task A
-# Phase 0.1
-python phase01/exp10_hierarchical_lm.py
-python phase01/exp17_knn_lm.py
-```
-
-Каждый `expXX` содержит: `README.md` (гипотеза, setup, результаты, интерпретация,
-failure modes, вывод), `results.json` (сырые метрики), местами `plots/`.
-
-**GPU:** exp16 требует CUDA-сборку torch (`pip install torch --index-url
-https://download.pytorch.org/whl/cu121`); при наличии nvrtc-расхождения DLL —
-подложить `nvrtc64_121_0.dll`.
 
 ---
 
-## Автор и контекст
+## Что дальше
 
-Исследование — часть проекта ChaoticLLM (репозиторий пользователя). Вдохновлено
-гипотезой, что обратимая хаотическая динамика может быть вычислительным
-механизмом LLM; синтез опирается на β-корпусный приор (Jelinek-Mercer/kNN-LM,
-идея из фильтра фантомов morin-filter).
+### Ближайшие шаги
+- [ ] Обучение на чат-датасете (вопрос→ответ) — чтобы модель «разговаривала»
+- [ ] Интеграция с Hermes (локальный OpenAI-совместимый сервер)
+- [ ] Чистка репозитория: архив старых экспериментов, единый README
+
+### Долгосрочные направления
+- [ ] Масштабирование (100M+ параметров, 1B+ токенов)
+- [ ] Сравнение с transformer на длинных контекстах (W≥1024)
+- [ ] Оптимизация через Triton / torch.compile
+
+---
+
+## Ключевые файлы победителя
+
+| Файл | Что это |
+|---|---|
+| `phase01/exp_vq/models_pc.py` | Архитектура PurePCLM + все режимы селекции |
+| `phase01/exp_vq/experiment_pc.py` | Протокол обучения, aux loss, eval |
+| `phase01/exp_vq/match_transformer.py` | Честный матч vs трансформер |
+| `phase01/exp_vq/README.md` | Подробное описание победителя |
+| `phase01/exp_vq/chat_sts_prog.py` | Инференс/генерация |
