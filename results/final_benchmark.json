@@ -1,0 +1,433 @@
+{
+  "STS-Prog": {
+    "seeds": [
+      {
+        "params": 900353,
+        "seed": 0,
+        "ppl": 18.106,
+        "train": {
+          "final_ppl": 17.49057388305664,
+          "best_ppl": 17.49057388305664,
+          "best_step": 6000,
+          "time": 296.1594898700714
+        },
+        "retrieval": {
+          "16": {
+            "trials": 200,
+            "hits": 84,
+            "accuracy": 0.42
+          },
+          "32": {
+            "trials": 200,
+            "hits": 73,
+            "accuracy": 0.365
+          },
+          "64": {
+            "trials": 200,
+            "hits": 73,
+            "accuracy": 0.365
+          },
+          "128": {
+            "trials": 200,
+            "hits": 68,
+            "accuracy": 0.34
+          },
+          "256": {
+            "trials": 200,
+            "hits": 56,
+            "accuracy": 0.28
+          }
+        }
+      },
+      {
+        "params": 900353,
+        "seed": 1,
+        "ppl": 17.522,
+        "train": {
+          "final_ppl": 8.319591522216797,
+          "best_ppl": 8.319591522216797,
+          "best_step": 6000,
+          "time": 289.4684555530548
+        },
+        "retrieval": {
+          "16": {
+            "trials": 200,
+            "hits": 82,
+            "accuracy": 0.41
+          },
+          "32": {
+            "trials": 200,
+            "hits": 90,
+            "accuracy": 0.45
+          },
+          "64": {
+            "trials": 200,
+            "hits": 67,
+            "accuracy": 0.335
+          },
+          "128": {
+            "trials": 200,
+            "hits": 70,
+            "accuracy": 0.35
+          },
+          "256": {
+            "trials": 200,
+            "hits": 63,
+            "accuracy": 0.315
+          }
+        }
+      },
+      {
+        "params": 900353,
+        "seed": 2,
+        "ppl": 18.181,
+        "train": {
+          "final_ppl": 10.33891773223877,
+          "best_ppl": 10.33891773223877,
+          "best_step": 6000,
+          "time": 297.2472457885742
+        },
+        "retrieval": {
+          "16": {
+            "trials": 200,
+            "hits": 63,
+            "accuracy": 0.315
+          },
+          "32": {
+            "trials": 200,
+            "hits": 71,
+            "accuracy": 0.355
+          },
+          "64": {
+            "trials": 200,
+            "hits": 72,
+            "accuracy": 0.36
+          },
+          "128": {
+            "trials": 200,
+            "hits": 79,
+            "accuracy": 0.395
+          },
+          "256": {
+            "trials": 200,
+            "hits": 73,
+            "accuracy": 0.365
+          }
+        }
+      }
+    ],
+    "stats": {
+      "mean_ppl": 17.936,
+      "std_ppl": 0.295,
+      "min_ppl": 17.522,
+      "max_ppl": 18.181
+    }
+  },
+  "STS-Prog (no-PC)": {
+    "seeds": [
+      {
+        "params": 900353,
+        "seed": 0,
+        "ppl": 19.507,
+        "train": {
+          "final_ppl": 17.043384552001953,
+          "best_ppl": 17.043384552001953,
+          "best_step": 6000,
+          "time": 229.50513625144958
+        },
+        "retrieval": {
+          "16": {
+            "trials": 200,
+            "hits": 44,
+            "accuracy": 0.22
+          },
+          "32": {
+            "trials": 200,
+            "hits": 28,
+            "accuracy": 0.14
+          },
+          "64": {
+            "trials": 200,
+            "hits": 33,
+            "accuracy": 0.165
+          },
+          "128": {
+            "trials": 200,
+            "hits": 30,
+            "accuracy": 0.15
+          },
+          "256": {
+            "trials": 200,
+            "hits": 33,
+            "accuracy": 0.165
+          }
+        }
+      },
+      {
+        "params": 900353,
+        "seed": 1,
+        "ppl": 19.52,
+        "train": {
+          "final_ppl": 12.353799819946289,
+          "best_ppl": 12.353799819946289,
+          "best_step": 6000,
+          "time": 230.97177815437317
+        },
+        "retrieval": {
+          "16": {
+            "trials": 200,
+            "hits": 35,
+            "accuracy": 0.175
+          },
+          "32": {
+            "trials": 200,
+            "hits": 47,
+            "accuracy": 0.235
+          },
+          "64": {
+            "trials": 200,
+            "hits": 29,
+            "accuracy": 0.145
+          },
+          "128": {
+            "trials": 200,
+            "hits": 44,
+            "accuracy": 0.22
+          },
+          "256": {
+            "trials": 200,
+            "hits": 31,
+            "accuracy": 0.155
+          }
+        }
+      },
+      {
+        "params": 900353,
+        "seed": 2,
+        "ppl": 20.007,
+        "train": {
+          "final_ppl": 12.89451789855957,
+          "best_ppl": 12.89451789855957,
+          "best_step": 6000,
+          "time": 232.03422236442566
+        },
+        "retrieval": {
+          "16": {
+            "trials": 200,
+            "hits": 35,
+            "accuracy": 0.175
+          },
+          "32": {
+            "trials": 200,
+            "hits": 23,
+            "accuracy": 0.115
+          },
+          "64": {
+            "trials": 200,
+            "hits": 29,
+            "accuracy": 0.145
+          },
+          "128": {
+            "trials": 200,
+            "hits": 34,
+            "accuracy": 0.17
+          },
+          "256": {
+            "trials": 200,
+            "hits": 44,
+            "accuracy": 0.22
+          }
+        }
+      }
+    ],
+    "stats": {
+      "mean_ppl": 19.678,
+      "std_ppl": 0.233,
+      "min_ppl": 19.507,
+      "max_ppl": 20.007
+    }
+  },
+  "Transformer (D=88)": {
+    "seeds": [
+      {
+        "params": 865904,
+        "seed": 0,
+        "ppl": 21.852,
+        "train": {
+          "final_ppl": 18.184566497802734,
+          "best_ppl": 18.184566497802734,
+          "best_step": 6000,
+          "time": 365.90209126472473
+        },
+        "retrieval": {
+          "16": {
+            "trials": 200,
+            "hits": 51,
+            "accuracy": 0.255
+          },
+          "32": {
+            "trials": 200,
+            "hits": 43,
+            "accuracy": 0.215
+          },
+          "64": {
+            "trials": 200,
+            "hits": 43,
+            "accuracy": 0.215
+          },
+          "128": {
+            "trials": 200,
+            "hits": 35,
+            "accuracy": 0.175
+          },
+          "256": {
+            "trials": 200,
+            "hits": 34,
+            "accuracy": 0.17
+          }
+        }
+      },
+      {
+        "params": 865904,
+        "seed": 1,
+        "ppl": 21.634,
+        "train": {
+          "final_ppl": 13.609971046447754,
+          "best_ppl": 13.609971046447754,
+          "best_step": 6000,
+          "time": 363.0321292877197
+        },
+        "retrieval": {
+          "16": {
+            "trials": 200,
+            "hits": 51,
+            "accuracy": 0.255
+          },
+          "32": {
+            "trials": 200,
+            "hits": 50,
+            "accuracy": 0.25
+          },
+          "64": {
+            "trials": 200,
+            "hits": 38,
+            "accuracy": 0.19
+          },
+          "128": {
+            "trials": 200,
+            "hits": 43,
+            "accuracy": 0.215
+          },
+          "256": {
+            "trials": 200,
+            "hits": 47,
+            "accuracy": 0.235
+          }
+        }
+      },
+      {
+        "params": 865904,
+        "seed": 2,
+        "ppl": 21.222,
+        "train": {
+          "final_ppl": 12.943374633789062,
+          "best_ppl": 12.943374633789062,
+          "best_step": 6000,
+          "time": 366.34237813949585
+        },
+        "retrieval": {
+          "16": {
+            "trials": 200,
+            "hits": 44,
+            "accuracy": 0.22
+          },
+          "32": {
+            "trials": 200,
+            "hits": 30,
+            "accuracy": 0.15
+          },
+          "64": {
+            "trials": 200,
+            "hits": 27,
+            "accuracy": 0.135
+          },
+          "128": {
+            "trials": 200,
+            "hits": 35,
+            "accuracy": 0.175
+          },
+          "256": {
+            "trials": 200,
+            "hits": 36,
+            "accuracy": 0.18
+          }
+        }
+      }
+    ],
+    "stats": {
+      "mean_ppl": 21.569,
+      "std_ppl": 0.261,
+      "min_ppl": 21.222,
+      "max_ppl": 21.852
+    }
+  },
+  "_scaling": {
+    "sts_prog": {
+      "64": {
+        "vram_mb": 30.4,
+        "time_ms": 29.99,
+        "tokens_per_sec": 2134
+      },
+      "128": {
+        "vram_mb": 30.6,
+        "time_ms": 14.0,
+        "tokens_per_sec": 9143
+      },
+      "256": {
+        "vram_mb": 31.0,
+        "time_ms": 14.0,
+        "tokens_per_sec": 18284
+      },
+      "512": {
+        "vram_mb": 31.8,
+        "time_ms": 15.0,
+        "tokens_per_sec": 34140
+      }
+    },
+    "transformer": {
+      "64": {
+        "vram_mb": 30.5,
+        "time_ms": 18.0,
+        "tokens_per_sec": 3556
+      },
+      "128": {
+        "vram_mb": 31.2,
+        "time_ms": 17.0,
+        "tokens_per_sec": 7530
+      },
+      "256": {
+        "vram_mb": 33.8,
+        "time_ms": 17.0,
+        "tokens_per_sec": 15058
+      },
+      "512": {
+        "vram_mb": 44.4,
+        "time_ms": 23.0,
+        "tokens_per_sec": 22261
+      }
+    }
+  },
+  "_meta": {
+    "commit": "47877a6f5e6603b1d66a3e615b2b34a58e5bf7f0",
+    "protocol": "FINAL_BENCHMARK.md",
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "steps": 6000,
+    "batch": 64,
+    "lr": 0.0005,
+    "warmup": 1000
+  }
+}
